@@ -1,0 +1,11 @@
+services:
+  imposterbot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: imposterbot
+    restart: unless-stopped
+    volumes:
+      - ./data:/data
+    environment:
+      - DISCORD_TOKEN=${DISCORD_TOKEN}

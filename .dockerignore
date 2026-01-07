@@ -1,0 +1,17 @@
+# Exclude the Cargo build output directory
+target/
+
+# Standard VCS ignores
+.git
+.gitignore
+.dockerignore
+
+# IDE/Editor files and directories
+.idea/
+.vscode/
+*.swp
+*~
+
+# Operating system files
+.DS_Store
+Thumbs.db
