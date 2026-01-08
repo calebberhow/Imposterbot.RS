@@ -9,6 +9,7 @@ use poise::{
 
 use crate::{
     Context, Error,
+    events::guild_member::{guild_member_add, guild_member_remove},
     infrastructure::util::{lossless_i64_to_u64, lossless_u64_to_i64, require_guild_id},
 };
 
@@ -41,7 +42,7 @@ async fn default_role_autocomplete<'a>(
 
         let mut rows = sqlx::query_file_as!(
             RoleObj,
-            "./src/queries/get_roles_in_guild.sql",
+            "./src/queries/get_member_roles_on_join.sql",
             guild_id_value
         )
         .fetch(&mut *conn);
@@ -78,10 +79,7 @@ pub async fn configure_welcome_channel(
     channel: Option<GuildChannel>,
 ) -> Result<(), Error> {
     trace!("configured welcome channel: {:?}", channel);
-    let guild_id = match require_guild_id(ctx) {
-        Ok(id) => id,
-        Err(e) => return Err(e),
-    };
+    let guild_id = require_guild_id(ctx)?;
 
     let guild_id_i64 = lossless_u64_to_i64(guild_id.get());
     let mut conn = match ctx.data().db_pool.acquire().await {
@@ -130,10 +128,7 @@ pub async fn configure_welcome_channel(
 )]
 pub async fn add_default_member_role(ctx: Context<'_>, role: RoleId) -> Result<(), Error> {
     trace!("adding default member role: {:?}", role);
-    let guild_id = match require_guild_id(ctx) {
-        Ok(id) => id,
-        Err(e) => return Err(e),
-    };
+    let guild_id = require_guild_id(ctx)?;
     let mut conn = match ctx.data().db_pool.acquire().await {
         Ok(c) => c,
         Err(e) => {
@@ -179,10 +174,7 @@ pub async fn remove_default_member_role(
     #[autocomplete = "default_role_autocomplete"] role: String,
 ) -> Result<(), Error> {
     trace!("deleting default member role: {:?}", role);
-    let guild_id = match require_guild_id(ctx) {
-        Ok(id) => id,
-        Err(e) => return Err(e),
-    };
+    let guild_id = require_guild_id(ctx)?;
     let mut conn = match ctx.data().db_pool.acquire().await {
         Ok(c) => c,
         Err(e) => {
@@ -235,5 +227,34 @@ pub async fn remove_default_member_role(
         }
     }
 
+    Ok(())
+}
+
+#[poise::command(slash_command, prefix_command, owners_only)]
+pub async fn test_member_add(ctx: Context<'_>) -> Result<(), Error> {
+    let member = match ctx.author_member().await {
+        Some(member) => member,
+        None => return Err("Must be in guild".into()),
+    };
+    guild_member_add(ctx.serenity_context(), ctx.data(), &member).await?;
+    ctx.send(
+        CreateReply::default()
+            .content("Acknowledged!")
+            .ephemeral(true),
+    )
+    .await?;
+    Ok(())
+}
+
+#[poise::command(slash_command, prefix_command, owners_only)]
+pub async fn test_member_remove(ctx: Context<'_>) -> Result<(), Error> {
+    let guild_id = require_guild_id(ctx)?;
+    guild_member_remove(ctx.serenity_context(), ctx.data(), &guild_id, ctx.author()).await?;
+    ctx.send(
+        CreateReply::default()
+            .content("Acknowledged!")
+            .ephemeral(true),
+    )
+    .await?;
     Ok(())
 }

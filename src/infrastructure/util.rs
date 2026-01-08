@@ -4,7 +4,10 @@ use std::{
 };
 
 use log::trace;
-use poise::{CreateReply, serenity_prelude::GuildId};
+use poise::{
+    CreateReply,
+    serenity_prelude::{ChannelId, CreateMessage, GuildId},
+};
 
 use crate::{Context, Error, infrastructure::environment};
 
@@ -81,4 +84,28 @@ pub fn lossless_u64_to_i64(value: u64) -> i64 {
 
 pub fn lossless_i64_to_u64(value: i64) -> u64 {
     u64::from_le_bytes(value.to_le_bytes())
+}
+
+pub async fn send_message_from_reply(
+    channel: &ChannelId,
+    ctx: &poise::serenity_prelude::Context,
+    reply: CreateReply,
+) -> Result<(), Error> {
+    let debuggable = DebuggableReply::new(&reply);
+    let mut create_message = CreateMessage::new()
+        .embeds(reply.embeds)
+        .add_files(reply.attachments);
+    if let Some(x) = reply.content {
+        create_message = create_message.content(x);
+    }
+    if let Some(x) = reply.allowed_mentions {
+        create_message = create_message.allowed_mentions(x);
+    }
+    if let Some(x) = reply.components {
+        create_message = create_message.components(x);
+    }
+
+    trace!("Sending message: {:?}", debuggable);
+    channel.send_message(ctx, create_message).await?;
+    Ok(())
 }

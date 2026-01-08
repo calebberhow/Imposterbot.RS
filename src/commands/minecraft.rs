@@ -125,7 +125,11 @@ async fn mcserver_autocomplete<'a>(
 ) -> impl Stream<Item = String> + 'a {
     // Get guild id
     trace!(partial=partial; "mcserver_autocomplete executed with args");
-    let guild_id = require_guild_id(ctx).unwrap_or_default();
+    let guild_id = match require_guild_id(ctx) {
+        Ok(id) => id,
+        Err(_) => return futures::stream::empty().boxed(),
+    };
+
     let list = ctx.data().mcserver_list.read().await;
     let clone = list.servers.clone();
     drop(list); // Release the read lock early
@@ -140,7 +144,8 @@ async fn mcserver_autocomplete<'a>(
             )
         })
         .map(|info| info.name.to_string())
-        .inspect(|name| trace!("Produced autocomplete value: {}", name));
+        .inspect(|name| trace!("Produced autocomplete value: {}", name))
+        .boxed();
     stream
 }
 

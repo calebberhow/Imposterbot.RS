@@ -113,6 +113,8 @@ fn get_enabled_commands() -> Vec<poise::Command<Data, imposterbot::Error>> {
         imposterbot::commands::member_management::configure_welcome_channel(),
         imposterbot::commands::member_management::add_default_member_role(),
         imposterbot::commands::member_management::remove_default_member_role(),
+        imposterbot::commands::member_management::test_member_add(),
+        imposterbot::commands::member_management::test_member_remove(),
     ];
 
     // Get the list of commands disabled by environment variable
@@ -239,7 +241,9 @@ async fn main() {
 
     let framework = create_discord_framework(pool);
 
-    let intents = serenity::GatewayIntents::non_privileged().union(GatewayIntents::MESSAGE_CONTENT);
+    let intents = serenity::GatewayIntents::non_privileged()
+        .union(GatewayIntents::MESSAGE_CONTENT)
+        .union(GatewayIntents::GUILD_MEMBERS);
     let client = serenity::ClientBuilder::new(token, intents)
         .framework(framework)
         .await;

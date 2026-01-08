@@ -1,12 +1,12 @@
 use crate::{
     Error,
-    infrastructure::{botdata::Data, ids, util::DebuggableReply},
+    infrastructure::{botdata::Data, ids, util::send_message_from_reply},
     lazy_regex,
 };
-use log::{info, trace, warn};
+use log::{info, warn};
 use poise::{
     CreateReply,
-    serenity_prelude::{Context, CreateMessage, Emoji, GuildId, Http, Message, ReactionType},
+    serenity_prelude::{Context, Emoji, GuildId, Http, Message, ReactionType},
 };
 use rand::seq::IndexedRandom;
 
@@ -61,24 +61,6 @@ fn matches_prefix(framework: poise::FrameworkContext<'_, Data, Error>, content: 
     return false;
 }
 
-async fn send_message(message: &Message, ctx: &Context, reply: CreateReply) -> Result<(), Error> {
-    let debuggable = DebuggableReply::new(&reply);
-    let mut create_message = CreateMessage::new().embeds(reply.embeds);
-    if let Some(x) = reply.content {
-        create_message = create_message.content(x);
-    }
-    if let Some(x) = reply.allowed_mentions {
-        create_message = create_message.allowed_mentions(x);
-    }
-    if let Some(x) = reply.components {
-        create_message = create_message.components(x);
-    }
-
-    trace!("Sending message: {:?}", debuggable);
-    message.channel_id.send_message(ctx, create_message).await?;
-    Ok(())
-}
-
 async fn send_reaction(
     message: &Message,
     ctx: &Context,
@@ -103,9 +85,9 @@ async fn send_reaction(
 
 pub async fn on_message(
     ctx: &Context,
-    message: &Message,
     framework: poise::FrameworkContext<'_, Data, Error>,
     _data: &Data,
+    message: &Message,
 ) -> Result<(), Error> {
     if message.author.bot || matches_prefix(framework, &message.content) {
         return Ok(());
@@ -134,11 +116,11 @@ pub async fn on_message(
     if BODY_REGEX.is_match(&message.content) {
         info!("User '{}' said 'body' {}", display_name, on_guild_string);
         let reply = CreateReply::default().content("where");
-        send_message(message, ctx, reply).await?;
+        send_message_from_reply(&message.channel_id, ctx, reply).await?;
     } else if RED_SUS_REGEX.is_match(&message.content) {
         info!("User '{}' said 'red sus' {}", display_name, on_guild_string);
         let reply = CreateReply::default().content("I agree, vote red.");
-        send_message(message, ctx, reply).await?;
+        send_message_from_reply(&message.channel_id, ctx, reply).await?;
     } else if BLUE_SUS_REGEX.is_match(&message.content) {
         info!(
             "User '{}' said 'blue sus' {}",
@@ -146,11 +128,11 @@ pub async fn on_message(
         );
         let reply =
             CreateReply::default().content("I think blue is safe, I saw them do a med scan.");
-        send_message(message, ctx, reply).await?;
+        send_message_from_reply(&message.channel_id, ctx, reply).await?;
     } else if NAV_REGEX.is_match(&message.content) {
         info!("User '{}' said 'nav' {}", display_name, on_guild_string);
         let reply = CreateReply::default().content("I was just in nav, didn't see anyone.");
-        send_message(message, ctx, reply).await?;
+        send_message_from_reply(&message.channel_id, ctx, reply).await?;
     } else if BLITZCRANK_REGEX.is_match(&message.content) {
         info!(
             "User '{}' said 'blitzcrank' {}",
@@ -163,7 +145,7 @@ pub async fn on_message(
         info!("User '{}' said 'meeting' {}", display_name, on_guild_string);
         send_reaction(message, ctx, "deny", guild_id, &on_guild_string).await?;
         let reply = CreateReply::default().content("**Loud meeting button noise**");
-        send_message(message, ctx, reply).await?;
+        send_message_from_reply(&message.channel_id, ctx, reply).await?;
     } else if IMPOSTERBOT_REGEX.is_match(&message.content) {
         info!(
             "User '{}' said 'imposterbot' {}",
@@ -176,7 +158,7 @@ pub async fn on_message(
             "It wasn't me, vote lime.",
         ];
         let reply = CreateReply::default().content(rand_message(&responses));
-        send_message(message, ctx, reply).await?;
+        send_message_from_reply(&message.channel_id, ctx, reply).await?;
     } else if SAD_REGEX.is_match(&message.content) {
         info!(
             "User '{}' said they are sad {}",
@@ -184,11 +166,11 @@ pub async fn on_message(
         );
         let responses = ["Don't be sad 😢", "Cheer up!"]; // Simplified emoji
         let reply = CreateReply::default().content(rand_message(&responses));
-        send_message(message, ctx, reply).await?;
+        send_message_from_reply(&message.channel_id, ctx, reply).await?;
     } else if OWO_REGEX.is_match(&content_lower) {
         info!("User '{}' said 'owo' {}", display_name, on_guild_string);
         let reply = CreateReply::default().content("OwO?");
-        send_message(message, ctx, reply).await?;
+        send_message_from_reply(&message.channel_id, ctx, reply).await?;
     } else if VENTED_REGEX.is_match(&message.content) {
         info!("User '{}' said 'vented' {}", display_name, on_guild_string);
         let responses = [
@@ -196,7 +178,7 @@ pub async fn on_message(
             "I was in storage.. no where near any vents.",
         ];
         let reply = CreateReply::default().content(rand_message(&responses));
-        send_message(message, ctx, reply).await?;
+        send_message_from_reply(&message.channel_id, ctx, reply).await?;
         let emote_option = get_emote_by_name(ctx, guild_id, "deny").await;
         if let Some(emote) = emote_option {
             let reaction = ReactionType::Custom {
@@ -212,13 +194,13 @@ pub async fn on_message(
             display_name, on_guild_string
         );
         let reply = CreateReply::default().content("Very sus.");
-        send_message(message, ctx, reply).await?;
+        send_message_from_reply(&message.channel_id, ctx, reply).await?;
         let reply = CreateReply::default().content("👀");
-        send_message(message, ctx, reply).await?;
+        send_message_from_reply(&message.channel_id, ctx, reply).await?;
     } else if WHO_YOU_GONNA_CALL_REGEX.is_match(&message.content) {
         info!("User '{}' said 'pain' {}", display_name, on_guild_string);
         let reply = CreateReply::default().content("ghost busters!");
-        send_message(message, ctx, reply).await?;
+        send_message_from_reply(&message.channel_id, ctx, reply).await?;
     } else if PAIN_REGEX.is_match(&message.content) {
         info!("User '{}' said 'pain' {}", display_name, on_guild_string);
         let emote_option = get_emote_by_name(ctx, guild_id, "pain").await;
@@ -240,7 +222,7 @@ pub async fn on_message(
             display_name, on_guild_string
         );
         let reply = CreateReply::default().content("Banning **MoustachioMario#2067**");
-        send_message(message, ctx, reply).await?;
+        send_message_from_reply(&message.channel_id, ctx, reply).await?;
     }
 
     Ok(())

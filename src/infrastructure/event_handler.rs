@@ -21,13 +21,13 @@ pub async fn event_handler(
             info!("Bot is ready. Logged in as {}", data_about_bot.user.name);
         }
         FullEvent::Message { new_message } => {
-            let result = on_message(ctx, new_message, framework, data).await;
+            let result = on_message(ctx, framework, data, new_message).await;
             if let Err(e) = result {
                 warn!("Message handler produced an error: {:?}", e);
             }
         }
         FullEvent::GuildMemberAddition { new_member } => {
-            let result = guild_member_add(new_member).await;
+            let result = guild_member_add(ctx, data, new_member).await;
             if let Err(e) = result {
                 warn!("Guild member added handler produced an error: {:?}", e);
             }
@@ -35,9 +35,9 @@ pub async fn event_handler(
         FullEvent::GuildMemberRemoval {
             guild_id,
             user,
-            member_data_if_available,
+            member_data_if_available: _,
         } => {
-            let result = guild_member_remove(guild_id, user, member_data_if_available).await;
+            let result = guild_member_remove(ctx, data, guild_id, user).await;
             if let Err(e) = result {
                 warn!("Guild member removed handler produced an error: {:?}", e);
             }

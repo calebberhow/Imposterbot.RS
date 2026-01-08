@@ -91,9 +91,9 @@ pub async fn roll(
     let mut author = CreateEmbedAuthor::new(format!(
         "{} rolls 1{:?}",
         ctx.author()
-            .clone()
             .member
-            .and_then(|m| m.nick)
+            .as_ref()
+            .and_then(|m| m.nick.clone())
             .unwrap_or(ctx.author().display_name().to_string()),
         dice
     ));
