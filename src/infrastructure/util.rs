@@ -4,12 +4,17 @@ use std::{
 };
 
 use log::trace;
-use poise::{
-    CreateReply,
-    serenity_prelude::{CreateMessage, GuildId},
-};
+use poise::{CreateReply, serenity_prelude::GuildId};
 
 use crate::{Context, Error, infrastructure::environment};
+
+#[macro_export]
+macro_rules! lazy_regex {
+    ($name:ident, $value:expr) => {
+        static $name: once_cell::sync::Lazy<regex::Regex> =
+            once_cell::sync::Lazy::new(|| regex::Regex::new($value).expect("Regex contains body"));
+    };
+}
 
 pub fn get_data_directory() -> PathBuf {
     let st: String =
@@ -24,7 +29,6 @@ pub fn get_media_directory() -> PathBuf {
 }
 
 pub struct DebuggableReply(CreateReply);
-pub struct DebuggableMessage(CreateMessage);
 
 #[derive(Clone, Debug, PartialEq)]
 struct AttachmentMetadata {
@@ -69,4 +73,12 @@ pub fn require_guild_id(ctx: Context<'_>) -> Result<GuildId, Error> {
         .ok_or("This function is only available in guilds")?;
     trace!("Found guild_id={:?}", guild_id);
     Ok(guild_id)
+}
+
+pub fn lossless_u64_to_i64(value: u64) -> i64 {
+    i64::from_le_bytes(value.to_le_bytes())
+}
+
+pub fn lossless_i64_to_u64(value: i64) -> u64 {
+    u64::from_le_bytes(value.to_le_bytes())
 }

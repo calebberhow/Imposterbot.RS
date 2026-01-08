@@ -110,6 +110,9 @@ fn get_enabled_commands() -> Vec<poise::Command<Data, imposterbot::Error>> {
         imposterbot::commands::minecraft::update_mcserver(),
         imposterbot::commands::roll::roll(),
         imposterbot::commands::coinflip::coinflip(),
+        imposterbot::commands::member_management::configure_welcome_channel(),
+        imposterbot::commands::member_management::add_default_member_role(),
+        imposterbot::commands::member_management::remove_default_member_role(),
     ];
 
     // Get the list of commands disabled by environment variable
@@ -199,7 +202,7 @@ fn create_discord_framework(pool: Arc<SqlitePool>) -> poise::Framework<Data, imp
                 })
             },
             event_handler: |_ctx, event, _framework, _data| {
-                Box::pin(imposterbot::infrastructure::events::event_handler(
+                Box::pin(imposterbot::infrastructure::event_handler::event_handler(
                     _ctx, event, _framework, _data,
                 ))
             },

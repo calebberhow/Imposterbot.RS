@@ -1,27 +1,14 @@
-macro_rules! lazy_regex {
-    ($name:ident, $value:expr) => {
-        static $name: Lazy<Regex> = Lazy::new(|| Regex::new($value).expect("Regex contains body"));
-    };
-}
-
-use log::{info, trace, warn};
-use once_cell::sync::Lazy;
-use poise::{
-    CreateReply,
-    serenity_prelude::{
-        Context, CreateMessage, Emoji, FullEvent, GuildId, Http, Message, ReactionType, UserId,
-    },
-};
-use rand::seq::IndexedRandom;
-use regex::Regex;
-
 use crate::{
     Error,
-    infrastructure::{botdata::Data, util::DebuggableReply},
+    infrastructure::{botdata::Data, ids, util::DebuggableReply},
+    lazy_regex,
 };
-
-pub const KHAZAARI_ID: UserId = UserId::new(193136312759353344);
-pub const CRESSY_ID: UserId = UserId::new(318195473364156419);
+use log::{info, trace, warn};
+use poise::{
+    CreateReply,
+    serenity_prelude::{Context, CreateMessage, Emoji, GuildId, Http, Message, ReactionType},
+};
+use rand::seq::IndexedRandom;
 
 lazy_regex! { BODY_REGEX, r"\bbody+\b"}
 lazy_regex! { RED_SUS_REGEX, r"\bred sus\b"}
@@ -114,7 +101,7 @@ async fn send_reaction(
     Ok(())
 }
 
-async fn on_message(
+pub async fn on_message(
     ctx: &Context,
     message: &Message,
     framework: poise::FrameworkContext<'_, Data, Error>,
@@ -246,7 +233,7 @@ async fn on_message(
             warn!("Emoji 'pain' was not found {}", on_guild_string);
         }
     } else if message.content == "<:doggoban:802308677737381948>"
-        && [KHAZAARI_ID, CRESSY_ID].contains(&message.author.id)
+        && [ids::KHAZAARI_ID, ids::CRESSY_ID].contains(&message.author.id)
     {
         info!(
             "User '{}' sent doggoban emoji {}",
@@ -256,27 +243,5 @@ async fn on_message(
         send_message(message, ctx, reply).await?;
     }
 
-    Ok(())
-}
-
-pub async fn event_handler(
-    ctx: &Context,
-    event: &FullEvent,
-    framework: poise::FrameworkContext<'_, Data, Error>,
-    data: &Data,
-) -> Result<(), Error> {
-    match event {
-        FullEvent::Ready { data_about_bot, .. } => {
-            info!("Bot is ready. Logged in as {}", data_about_bot.user.name);
-        }
-        FullEvent::Message { new_message } => {
-            let result = on_message(ctx, new_message, framework, data).await;
-            match result {
-                Err(e) => warn!("Message handler produced an error: {:?}", e),
-                _ => {}
-            };
-        }
-        _ => {}
-    }
     Ok(())
 }

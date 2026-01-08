@@ -7,6 +7,7 @@ edition = "2024"
 async-minecraft-ping = { git = "https://github.com/jsvana/async-minecraft-ping", branch = "master", features = [
     "srv",
 ] }
+async-stream = "0.3.6"
 dotenvy = "0.15.7"
 env_logger = { version = "0.11.8", features = ["kv"] }
 log = "0.4.29"

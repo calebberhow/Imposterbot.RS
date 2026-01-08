@@ -1,14 +1,15 @@
 use std::sync::Arc;
 
 use async_minecraft_ping::{ConnectionConfig, ServerError, StatusResponse};
-use futures::StreamExt;
 use log::{info, trace, warn};
 use poise::CreateReply;
-use poise::serenity_prelude::futures::{self, Stream};
+use poise::serenity_prelude::futures::{self, Stream, StreamExt};
 use poise::serenity_prelude::{self as serenity, GuildId};
 use sqlx::SqlitePool;
 
-use crate::infrastructure::util::{DebuggableReply, require_guild_id};
+use crate::infrastructure::util::{
+    DebuggableReply, lossless_i64_to_u64, lossless_u64_to_i64, require_guild_id,
+};
 use crate::{Context, Error};
 
 #[derive(Debug)]
@@ -106,14 +107,6 @@ impl McServerList {
         server_list.refresh(pool).await?;
         Ok(server_list)
     }
-}
-
-fn lossless_u64_to_i64(value: u64) -> i64 {
-    i64::from_le_bytes(value.to_le_bytes())
-}
-
-fn lossless_i64_to_u64(value: i64) -> u64 {
-    u64::from_le_bytes(value.to_le_bytes())
 }
 
 async fn ping_mc_server(
