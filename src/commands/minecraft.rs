@@ -281,7 +281,7 @@ pub async fn add_mcserver(
     address: String,
     port: Option<u16>,
 ) -> Result<(), Error> {
-    trace!(name=name.as_str(), address=address.as_str(), port=port; "rm_mcserver executed with args");
+    trace!(name=name.as_str(), address=address.as_str(), port=port; "add_mcserver executed with args");
     let mut servers = ctx.data().mcserver_list.write().await;
     let srv_match = servers
         .servers
@@ -298,12 +298,13 @@ pub async fn add_mcserver(
     // Add server to database
     let mut conn = ctx.data().db_pool.clone().acquire().await?;
     let i64_guild_id = lossless_u64_to_i64(guild_id.get());
+    let port_or_zero = port.unwrap_or(0);
     let query_result = sqlx::query_file!(
         "./src/queries/insert_mcserver.sql",
         i64_guild_id,
         name,
         address,
-        port
+        port_or_zero
     )
     .execute(&mut *conn)
     .await?;

@@ -10,8 +10,8 @@ use log::{error, trace, warn};
 use poise::{
     CreateReply,
     serenity_prelude::{
-        ChannelId, Context, CreateAttachment, CreateEmbed, CreateEmbedAuthor, GuildId, Member,
-        RoleId, User,
+        ChannelId, Context, CreateAttachment, CreateEmbed, CreateEmbedAuthor, CreateEmbedFooter,
+        GuildId, Member, RoleId, User, futures::future,
     },
 };
 use sqlx::SqlitePool;
@@ -95,9 +95,14 @@ async fn get_member_roles_on_join(
 }
 
 async fn say_hello(ctx: &Context, data: &Data, member: &Member) -> Result<(), Error> {
-    let channel = match get_welcome_channel(data.db_pool.clone(), &member.guild_id).await {
+    let (welcome_channel, guild) = future::join(
+        get_welcome_channel(data.db_pool.clone(), &member.guild_id),
+        member.guild_id.to_partial_guild_with_counts(ctx), // TODO: this request is quite large and slow. Figure out how to more quickly retrieve the guild member count.
+    )
+    .await;
+    let channel = match welcome_channel {
         Some(x) => x,
-        None => return Ok(()),
+        None => return Ok(()), // Welcome channel not confiugred on this guild
     };
 
     let mut author = CreateEmbedAuthor::new("𝚆𝚎𝚕𝚌𝚘𝚖𝚎 𝚝𝚘 𝙲𝚘𝚣𝚢 𝙲𝚘𝚜𝚖𝚘𝚜!");
@@ -106,11 +111,19 @@ async fn say_hello(ctx: &Context, data: &Data, member: &Member) -> Result<(), Er
     }
 
     let attachment = CreateAttachment::path(get_media_directory().join("cozyanim.gif")).await?;
-    let embed = CreateEmbed::new()
+    let mut embed = CreateEmbed::new()
         .description(format!("{} has joined!", member.user.name))
         .author(author)
         .color(colors::royal_blue())
         .thumbnail(format!("attachment://{}", attachment.filename));
+
+    // Only add member count footer if member count is available from http request
+    if let Ok(g) = &guild
+        && let Some(count) = g.approximate_member_count
+    {
+        embed = embed.footer(CreateEmbedFooter::new(format!("Member Count: {}", count)));
+    }
+
     let reply = CreateReply::default()
         .embed(embed)
         .content(format!("Welcome {}!", member.display_name()))
@@ -130,7 +143,7 @@ async fn say_goodbye(
         None => return Ok(()),
     };
 
-    let reply = CreateReply::default().content(format!("Goodbye {}", user.name));
+    let reply = CreateReply::default().content(format!("Goodbye, {}", user.name));
 
     send_message_from_reply(&channel, ctx, reply).await?;
     Ok(())
@@ -141,7 +154,7 @@ async fn add_initial_member_roles(
     data: &Data,
     new_member: &Member,
 ) -> Result<(), Error> {
-    trace!("Guild member removed {}", new_member.user.name);
+    trace!("Added initial roles to {}", new_member.user.name);
     match get_member_roles_on_join(data.db_pool.clone(), &new_member.guild_id).await {
         Some(roles) => match new_member.add_roles(ctx, &roles).await {
             Ok(_) => Ok(()),
