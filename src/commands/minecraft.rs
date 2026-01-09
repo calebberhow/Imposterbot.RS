@@ -149,7 +149,7 @@ async fn mcserver_autocomplete<'a>(
     stream
 }
 
-#[poise::command(slash_command, prefix_command, track_edits, track_deletion)]
+#[poise::command(slash_command, prefix_command, track_edits, track_deletion, guild_only)]
 pub async fn mcstatus(
     ctx: Context<'_>,
     #[description = "Server Name"]
@@ -220,7 +220,8 @@ pub async fn mcstatus(
     prefix_command,
     rename = "rm-mcserver",
     required_permissions = "ADMINISTRATOR",
-    default_member_permissions = "ADMINISTRATOR"
+    default_member_permissions = "ADMINISTRATOR",
+    guild_only
 )]
 pub async fn rm_mcserver(
     ctx: Context<'_>,
@@ -273,7 +274,8 @@ pub async fn rm_mcserver(
     prefix_command,
     rename = "add-mcserver",
     required_permissions = "ADMINISTRATOR",
-    default_member_permissions = "ADMINISTRATOR"
+    default_member_permissions = "ADMINISTRATOR",
+    guild_only
 )]
 pub async fn add_mcserver(
     ctx: Context<'_>,
@@ -337,7 +339,8 @@ pub async fn add_mcserver(
     prefix_command,
     rename = "update-mcserver",
     required_permissions = "ADMINISTRATOR",
-    default_member_permissions = "ADMINISTRATOR"
+    default_member_permissions = "ADMINISTRATOR",
+    guild_only
 )]
 pub async fn update_mcserver(
     ctx: Context<'_>,

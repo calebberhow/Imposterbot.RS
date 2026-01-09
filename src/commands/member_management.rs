@@ -72,7 +72,8 @@ async fn default_role_autocomplete<'a>(
     slash_command,
     prefix_command,
     required_permissions = "ADMINISTRATOR",
-    default_member_permissions = "ADMINISTRATOR"
+    default_member_permissions = "ADMINISTRATOR",
+    guild_only
 )]
 pub async fn configure_welcome_channel(
     ctx: Context<'_>,
@@ -124,7 +125,8 @@ pub async fn configure_welcome_channel(
     slash_command,
     prefix_command,
     required_permissions = "ADMINISTRATOR",
-    default_member_permissions = "ADMINISTRATOR"
+    default_member_permissions = "ADMINISTRATOR",
+    guild_only
 )]
 pub async fn add_default_member_role(ctx: Context<'_>, role: RoleId) -> Result<(), Error> {
     trace!("adding default member role: {:?}", role);
@@ -167,7 +169,8 @@ pub async fn add_default_member_role(ctx: Context<'_>, role: RoleId) -> Result<(
     slash_command,
     prefix_command,
     required_permissions = "ADMINISTRATOR",
-    default_member_permissions = "ADMINISTRATOR"
+    default_member_permissions = "ADMINISTRATOR",
+    guild_only
 )]
 pub async fn remove_default_member_role(
     ctx: Context<'_>,
@@ -230,7 +233,7 @@ pub async fn remove_default_member_role(
     Ok(())
 }
 
-#[poise::command(slash_command, prefix_command, owners_only)]
+#[poise::command(slash_command, prefix_command, owners_only, guild_only)]
 pub async fn test_member_add(ctx: Context<'_>) -> Result<(), Error> {
     let member = match ctx.author_member().await {
         Some(member) => member,
@@ -246,7 +249,7 @@ pub async fn test_member_add(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-#[poise::command(slash_command, prefix_command, owners_only)]
+#[poise::command(slash_command, prefix_command, owners_only, guild_only)]
 pub async fn test_member_remove(ctx: Context<'_>) -> Result<(), Error> {
     let guild_id = require_guild_id(ctx)?;
     guild_member_remove(ctx.serenity_context(), ctx.data(), &guild_id, ctx.author()).await?;
