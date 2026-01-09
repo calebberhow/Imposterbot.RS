@@ -9,3 +9,8 @@ services:
       - ./data:/data
     environment:
       - DISCORD_TOKEN=${DISCORD_TOKEN}
+      - COMMAND_DISABLE_LIST=${COMMAND_DISABLE_LIST}
+      - LOG_LEVEL=${LOG_LEVEL}
+      - LOG_PATH=${LOG_PATH}
+      - DATABASE_URL=${DATABASE_URL}
+      - OWNERS=${OWNERS}

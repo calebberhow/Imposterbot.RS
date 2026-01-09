@@ -52,7 +52,7 @@ RUN cargo build --target x86_64-unknown-linux-musl --release
 # Imposterbot image
 ########################################################################################################################
 
-FROM scratch
+FROM ubuntu:24.04
 
 # Setup default environment variables
 ENV DATABASE_URL=sqlite:/data/imposterbot_data.db
@@ -66,6 +66,7 @@ COPY --from=builder --chown=appuser:appgroup ./target/x86_64-unknown-linux-musl/
 COPY ./migrations /migrations
 COPY ./media /media
 
-USER appuser
+# TODO: Setting the user prevents write access to /data volume
+# USER appuser
 
 ENTRYPOINT ["/app/imposterbot"]
