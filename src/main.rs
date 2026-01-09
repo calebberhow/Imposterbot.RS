@@ -8,8 +8,8 @@ use env_logger::{Builder, Env};
 use imposterbot::infrastructure::botdata::Data;
 use imposterbot::infrastructure::util::get_data_directory;
 use imposterbot::{commands::minecraft::McServerList, infrastructure::environment};
-use log::{error, info};
-use poise::serenity_prelude::{self as serenity, GatewayIntents};
+use log::{error, info, warn};
+use poise::serenity_prelude::{self as serenity, GatewayIntents, UserId};
 use sqlx::SqlitePool;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use tokio::sync::RwLock;
@@ -170,7 +170,45 @@ async fn get_init_mcsever_list(pool: Arc<SqlitePool>) -> McServerList {
     }
 }
 
+enum OwnerParseError {
+    MissingEnvVar,
+    UserIdParseError(String),
+}
+
+fn try_get_owners_env() -> Result<Vec<UserId>, OwnerParseError> {
+    let env_var = std::env::var(environment::OWNERS).map_err(|_| OwnerParseError::MissingEnvVar)?;
+    env_var
+        .split(',')
+        .into_iter()
+        .map(|value| {
+            value
+                .trim()
+                .parse::<u64>()
+                .map(|num| UserId::new(num))
+                .map_err(|e| OwnerParseError::UserIdParseError(e.to_string()))
+        })
+        .collect()
+}
+
 fn create_discord_framework(pool: Arc<SqlitePool>) -> poise::Framework<Data, imposterbot::Error> {
+    let initialize_owners: bool;
+    let owners: std::collections::HashSet<UserId>;
+    match try_get_owners_env() {
+        Ok(owners_vec) => {
+            initialize_owners = false;
+            owners = std::collections::HashSet::from_iter(owners_vec);
+        }
+        Err(error) => {
+            match error {
+                OwnerParseError::UserIdParseError(e) => {
+                    warn!("Invalid UserId in {}: {}", environment::OWNERS, e);
+                }
+                _ => {}
+            }
+            initialize_owners = true;
+            owners = std::collections::HashSet::new();
+        }
+    }
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
             commands: get_enabled_commands(),
@@ -182,6 +220,8 @@ fn create_discord_framework(pool: Arc<SqlitePool>) -> poise::Framework<Data, imp
                 ))),
                 ..Default::default()
             },
+            initialize_owners: initialize_owners,
+            owners: owners,
             pre_command: |ctx| {
                 Box::pin(async move {
                     info!(

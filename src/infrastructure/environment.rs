@@ -11,3 +11,5 @@ const_str!(DISCORD_TOKEN);
 const_str!(LOG_LEVEL);
 const_str!(LOG_STYLE);
 const_str!(LOG_PATH);
+
+const_str!(OWNERS);
