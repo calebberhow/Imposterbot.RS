@@ -1,5 +1,7 @@
 use crate::infrastructure::botdata;
 
+pub mod entities;
+
 pub mod commands {
     pub mod builtins;
     pub mod coinflip;

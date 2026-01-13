@@ -1,5 +1,5 @@
 # Exclude the Cargo build output directory
-target/
+**/target/
 
 # Standard VCS ignores
 .git

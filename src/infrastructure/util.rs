@@ -1,5 +1,6 @@
 use std::{
     fmt::Debug,
+    num::ParseIntError,
     path::{Path, PathBuf},
 };
 
@@ -78,12 +79,19 @@ pub fn require_guild_id(ctx: Context<'_>) -> Result<GuildId, Error> {
     Ok(guild_id)
 }
 
-pub fn lossless_u64_to_i64(value: u64) -> i64 {
-    i64::from_le_bytes(value.to_le_bytes())
+pub fn id_to_string<T>(value: T) -> String
+where
+    T: Into<u64>,
+{
+    let int: u64 = value.into();
+    int.to_string()
 }
 
-pub fn lossless_i64_to_u64(value: i64) -> u64 {
-    u64::from_le_bytes(value.to_le_bytes())
+pub fn id_from_string<T>(value: &str) -> Result<T, ParseIntError>
+where
+    T: From<u64>,
+{
+    value.parse::<u64>().map(|int| T::from(int))
 }
 
 pub async fn send_message_from_reply(

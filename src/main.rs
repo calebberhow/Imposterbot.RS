@@ -1,6 +1,5 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -8,9 +7,9 @@ use env_logger::{Builder, Env};
 use imposterbot::infrastructure::botdata::Data;
 use imposterbot::infrastructure::environment;
 use imposterbot::infrastructure::util::get_data_directory;
+use migration::{Migrator, MigratorTrait};
 use poise::serenity_prelude::{self as serenity, GatewayIntents, UserId};
-use sqlx::SqlitePool;
-use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+use sea_orm::{ConnectOptions, Database, DatabaseConnection};
 use tracing::{debug, error, info, warn};
 
 fn get_log_path_var() -> Option<bool> {
@@ -49,27 +48,20 @@ fn log_env_file_result(env_file: Option<PathBuf>) {
     }
 }
 
-async fn try_create_db_pool() -> Result<Arc<sqlx::SqlitePool>, imposterbot::Error> {
-    let data_dir = get_data_directory();
-    let db_url = data_dir.join("imposterbot_data.db");
-    info!(
-        "Connecting to database with url: {}",
-        db_url.to_str().unwrap()
-    );
-    let options = SqliteConnectOptions::from_str(db_url.to_str().unwrap())?.create_if_missing(true);
-
-    // if (options.get_filename())
-    // std::fs::create_dir_all(options.get_filename())?;
-
-    let pool = SqlitePoolOptions::new()
-        .connect_with(options)
-        .await
-        .unwrap();
-
-    Ok(Arc::new(pool))
+fn ensure_data_dir_created() -> tokio::io::Result<()> {
+    let path = get_data_directory();
+    std::fs::create_dir_all(path)
 }
 
-async fn create_db_pool() -> Arc<SqlitePool> {
+async fn try_create_db_pool() -> Result<DatabaseConnection, imposterbot::Error> {
+    let db_url = std::env::var("DATABASE_URL").expect("missing environment variable DATABASE_URL");
+    let opt = ConnectOptions::new(db_url.clone());
+    if opt.get_url().starts_with("sqlite:") {}
+    let db = Database::connect(opt).await?;
+    Ok(db)
+}
+
+async fn create_db_pool() -> DatabaseConnection {
     match try_create_db_pool().await {
         Err(e) => {
             // error!("Failed to create database pool: {:?}", e);
@@ -79,9 +71,8 @@ async fn create_db_pool() -> Arc<SqlitePool> {
     }
 }
 
-async fn init_db(pool: Arc<SqlitePool>) -> Result<(), imposterbot::Error> {
-    let mut conn = pool.acquire().await?;
-    sqlx::migrate!().run(&mut *conn).await.unwrap();
+async fn init_db(db: &DatabaseConnection) -> Result<(), imposterbot::Error> {
+    Migrator::up(db, None).await?;
     info!("Database initialized.");
     Ok(())
 }
@@ -169,7 +160,9 @@ fn try_get_owners_env() -> Result<Vec<UserId>, OwnerParseError> {
         .collect()
 }
 
-fn create_discord_framework(pool: Arc<SqlitePool>) -> poise::Framework<Data, imposterbot::Error> {
+fn create_discord_framework(
+    pool: DatabaseConnection,
+) -> poise::Framework<Data, imposterbot::Error> {
     let initialize_owners: bool;
     let owners: std::collections::HashSet<UserId>;
     match try_get_owners_env() {
@@ -276,9 +269,9 @@ async fn main() {
     info!("Starting Imposterbot...");
     log_env_file_result(env_file);
     let token = get_discord_token();
-
+    ensure_data_dir_created().expect("Data directory should be creatable");
     let pool = create_db_pool().await;
-    init_db(pool.clone()).await.unwrap();
+    init_db(&pool).await.unwrap();
 
     let framework = create_discord_framework(pool);
 

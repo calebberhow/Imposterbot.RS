@@ -2,11 +2,14 @@ use async_minecraft_ping::{ConnectionConfig, ServerError, StatusResponse};
 use poise::CreateReply;
 use poise::serenity_prelude::futures::{self, Stream, StreamExt};
 use poise::serenity_prelude::{self as serenity};
-use tracing::{debug, error, info, trace};
+use sea_orm::ActiveValue::Set;
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
+use tracing::{debug, info, trace};
 
+use crate::entities::mc_server;
 use crate::infrastructure::colors;
 use crate::infrastructure::util::{
-    DebuggableReply, defer_or_broadcast, lossless_u64_to_i64, require_guild_id,
+    DebuggableReply, defer_or_broadcast, id_to_string, require_guild_id,
 };
 use crate::{Context, Error};
 
@@ -34,31 +37,19 @@ async fn mcserver_autocomplete<'a>(
         Err(_) => return futures::stream::empty().boxed(),
     };
 
-    let guild_id_i64 = lossless_u64_to_i64(guild_id.get());
-    let mut conn = match ctx.data().db_pool.acquire().await {
-        Ok(c) => c,
-        Err(e) => {
-            error!("Failed to aquire db connection: {}", e);
-            return futures::stream::empty().boxed();
-        }
-    };
-    struct McServerResult {
-        name: String,
-    }
-    let result = sqlx::query_file_as!(
-        McServerResult,
-        "./src/queries/mc/get_all_mcserver_names.sql",
-        guild_id_i64,
-        partial
-    )
-    .fetch_all(&mut *conn)
-    .await
-    .unwrap_or_default();
-
-    futures::stream::iter(result)
-        .map(|info| info.name.to_string())
-        .inspect(|name| trace!("Produced autocomplete value: {}", name))
-        .boxed()
+    let result: Vec<String> = mc_server::Entity::find()
+        .select_only()
+        .column(mc_server::Column::Name)
+        .filter(mc_server::Column::GuildId.eq(id_to_string(guild_id)))
+        .filter(mc_server::Column::Name.starts_with(partial))
+        .order_by_asc(mc_server::Column::Name)
+        .limit(10)
+        .into_tuple()
+        .all(&ctx.data().db_pool)
+        .await
+        .unwrap_or_default();
+    trace!("Produced autocomplete values: {:?}", result);
+    futures::stream::iter(result).boxed()
 }
 
 #[poise::command(slash_command, prefix_command, track_edits, track_deletion, guild_only)]
@@ -109,6 +100,10 @@ pub async fn mcstatus(
 
         if let Some(instructions) = server_info.instructions {
             embed = embed.field("Instructions", instructions, false);
+        }
+
+        if let Some(thumbnail) = server_info.thumbnail {
+            embed = embed.thumbnail(thumbnail);
         }
 
         if let Ok(ref status) = status_result {
@@ -173,18 +168,10 @@ pub async fn rm_mcserver(
     }
 
     // Remove server from list
-    let mut conn = ctx.data().db_pool.clone().acquire().await?;
     let guild_id = require_guild_id(ctx)?;
-    let i64_guild_id = lossless_u64_to_i64(guild_id.get());
-    let query_result =
-        sqlx::query_file!("./src/queries/mc/delete_mcserver.sql", name, i64_guild_id)
-            .execute(&mut *conn)
-            .await?;
-    drop(conn);
-
-    if query_result.rows_affected() == 0 {
-        return Err(format!("Server '{}' not found in database. In-memory server list refreshed as it was desynchronized from database.", name).into());
-    }
+    mc_server::Entity::delete_by_id((id_to_string(guild_id), name.clone()))
+        .exec(&ctx.data().db_pool)
+        .await?;
 
     ctx.send(
         CreateReply::default()
@@ -209,29 +196,14 @@ struct McServerResult {
 
 async fn get_mcserver(ctx: Context<'_>, name: &String) -> Result<Option<McServerResult>, Error> {
     let guild_id = require_guild_id(ctx)?;
-    let i64_guild_id = lossless_u64_to_i64(guild_id.get());
-    let mut conn = ctx.data().db_pool.acquire().await?;
-    struct McServerQueryResult {
-        address: String,
-        port: i64,
-        version: String,
-        modpack: String,
-        custom_description: String,
-        instructions: String,
-        thumbnail: String,
-    }
-    sqlx::query_file_as!(
-        McServerQueryResult,
-        "./src/queries/mc/get_mcserver.sql",
-        i64_guild_id,
-        name
-    )
-    .fetch_optional(&mut *conn)
-    .await
-    .map_err(|e| e.into())
-    .map(|result| match result {
+
+    let found = mc_server::Entity::find_by_id((id_to_string(guild_id), name.clone()))
+        .one(&ctx.data().db_pool)
+        .await?;
+
+    match found {
         Some(value) => {
-            let port = if value.port > 0 && value.port < u16::MAX as i64 {
+            let port = if value.port > 0 && value.port < u16::MAX as i32 {
                 Some(value.port as u16)
             } else {
                 None
@@ -261,7 +233,7 @@ async fn get_mcserver(ctx: Context<'_>, name: &String) -> Result<Option<McServer
             } else {
                 None
             };
-            Some(McServerResult {
+            Ok(Some(McServerResult {
                 address: value.address,
                 port: port,
                 version: version,
@@ -269,10 +241,10 @@ async fn get_mcserver(ctx: Context<'_>, name: &String) -> Result<Option<McServer
                 custom_description: custom_description,
                 instructions: instructions,
                 thumbnail: thumbnail,
-            })
+            }))
         }
-        _ => None,
-    })
+        _ => Ok(None),
+    }
 }
 
 #[poise::command(
@@ -302,6 +274,7 @@ pub async fn add_mcserver(
         modpack = modpack,
         custom_description = custom_description,
         instructions = instructions,
+        thumbnail = thumbnail,
         "add_mcserver executed with args"
     );
 
@@ -312,30 +285,26 @@ pub async fn add_mcserver(
 
     // Add server to database
     let guild_id = require_guild_id(ctx)?;
-    let i64_guild_id = lossless_u64_to_i64(guild_id.get());
-    let mut conn = ctx.data().db_pool.clone().acquire().await?;
     let port_or_zero = port.unwrap_or(0);
     let version_or_empty = version.unwrap_or("".into());
     let modpack_or_empty = modpack.unwrap_or("".into());
     let custom_description_or_empty = custom_description.unwrap_or("".into());
-    let thumbnail_or_empty = thumbnail.unwrap_or("".into());
     let instructions_or_empty = instructions.unwrap_or("".into());
-    sqlx::query_file!(
-        "./src/queries/mc/insert_mcserver.sql",
-        i64_guild_id,
-        name,
-        address,
-        port_or_zero,
-        version_or_empty,
-        modpack_or_empty,
-        thumbnail_or_empty,
-        custom_description_or_empty,
-        instructions_or_empty
-    )
-    .execute(&mut *conn)
-    .await?;
+    let thumbnail_or_empty = thumbnail.unwrap_or("".into());
 
-    drop(conn);
+    mc_server::Entity::insert(mc_server::ActiveModel {
+        guild_id: Set(id_to_string(guild_id)),
+        name: Set(name.clone()),
+        address: Set(address),
+        port: Set(port_or_zero as i32),
+        version: Set(version_or_empty),
+        modpack: Set(modpack_or_empty),
+        custom_description: Set(custom_description_or_empty),
+        instructions: Set(instructions_or_empty),
+        thumbnail: Set(thumbnail_or_empty),
+    })
+    .exec(&ctx.data().db_pool)
+    .await?;
 
     ctx.send(
         CreateReply::default()
@@ -349,7 +318,7 @@ pub async fn add_mcserver(
 
 #[poise::command(
     slash_command,
-    prefix_command,
+    //prefix_command, // bug in proc-macro causes prefix commands with many Option<T> parameters to have exponential compilation times
     rename = "update-mcserver",
     required_permissions = "ADMINISTRATOR",
     default_member_permissions = "ADMINISTRATOR",
@@ -433,24 +402,44 @@ pub async fn update_mcserver(
         return Err("At least one parameter must be updated.".into());
     }
 
-    let mut conn = ctx.data().db_pool.clone().acquire().await?;
     let guild_id = require_guild_id(ctx)?;
-    let gid_i64 = lossless_u64_to_i64(guild_id.get());
-    sqlx::query_file!(
-        "./src/queries/mc/update_mcserver.sql",
-        address,
-        port_value,
-        version,
-        modpack,
-        custom_description,
-        instructions,
-        thumbnail,
-        gid_i64,
-        name,
-    )
-    .execute(&mut *conn)
-    .await?;
-    drop(conn);
+    let mut model = mc_server::ActiveModel {
+        guild_id: Set(id_to_string(guild_id)),
+        name: Set(name.clone()),
+        ..Default::default()
+    };
+
+    if let Some(x) = address {
+        model.address = Set(x);
+    }
+
+    if let Some(x) = port_value {
+        model.port = Set(x.into());
+    }
+
+    if let Some(x) = version {
+        model.version = Set(x);
+    }
+
+    if let Some(x) = modpack {
+        model.modpack = Set(x);
+    }
+
+    if let Some(x) = custom_description {
+        model.custom_description = Set(x);
+    }
+
+    if let Some(x) = instructions {
+        model.instructions = Set(x);
+    }
+
+    if let Some(x) = thumbnail {
+        model.thumbnail = Set(x);
+    }
+
+    mc_server::Entity::update(model)
+        .exec(&ctx.data().db_pool)
+        .await?;
 
     ctx.send(
         CreateReply::default()

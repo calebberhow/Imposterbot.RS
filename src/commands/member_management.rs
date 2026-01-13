@@ -1,3 +1,5 @@
+use entities::welcome_channel;
+use migration::OnConflict;
 use poise::{
     CreateReply,
     serenity_prelude::{
@@ -5,12 +7,14 @@ use poise::{
         futures::{self, Stream, StreamExt},
     },
 };
-use tracing::{debug, trace, warn};
+use sea_orm::{ActiveValue::Set, EntityTrait};
+use tracing::{debug, trace};
 
 use crate::{
     Context, Error,
-    events::guild_member::{guild_member_add, guild_member_remove},
-    infrastructure::util::{lossless_i64_to_u64, lossless_u64_to_i64, require_guild_id},
+    entities::{self, welcome_roles},
+    events::guild_member::{get_member_roles_on_join, guild_member_add, guild_member_remove},
+    infrastructure::util::{id_to_string, require_guild_id},
 };
 
 async fn default_role_autocomplete<'a>(
@@ -27,48 +31,13 @@ async fn default_role_autocomplete<'a>(
         Err(_) => return futures::stream::empty().boxed(),
     };
 
-    let conn = match ctx.data().db_pool.acquire().await {
-        Ok(c) => c,
-        Err(e) => {
-            warn!("DB connection failed: {}", e);
-            return futures::stream::empty().boxed();
-        }
-    };
+    let roles = get_member_roles_on_join(&ctx.data().db_pool, &guild_id)
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .map(|r| id_to_string(r.clone()));
 
-    let guild_id_value = lossless_u64_to_i64(guild_id.get());
-    async_stream::stream! {
-        let mut conn = conn;
-
-        struct RoleObj {
-            role_id: i64,
-        }
-
-        let mut rows = sqlx::query_file_as!(
-            RoleObj,
-            "./src/queries/member_management/get_member_roles_on_join.sql",
-            guild_id_value
-        )
-        .fetch(&mut *conn);
-
-        while let Some(row) = rows.next().await {
-            let role_obj = match row {
-                Ok(r) => r,
-                Err(_) => continue,
-            };
-
-            let role_id = RoleId::new(lossless_i64_to_u64(role_obj.role_id));
-
-            let role = match guild_id.role(&ctx, role_id).await {
-                Ok(r) => r,
-                Err(_) => continue,
-            };
-
-            if role.name.to_lowercase().starts_with(&partial.to_lowercase()) {
-                yield role.name;
-            }
-        }
-    }
-    .boxed()
+    futures::stream::iter(roles).boxed()
 }
 
 #[poise::command(
@@ -85,22 +54,17 @@ pub async fn configure_welcome_channel(
     trace!("configured welcome channel: {:?}", channel);
     let guild_id = require_guild_id(ctx)?;
 
-    let guild_id_i64 = lossless_u64_to_i64(guild_id.get());
-    let mut conn = match ctx.data().db_pool.acquire().await {
-        Ok(c) => c,
-        Err(e) => {
-            warn!("DB connection failed: {}", e);
-            return Err(e.into());
-        }
-    };
     if let Some(channel) = channel {
-        let channel_id_i64 = lossless_u64_to_i64(channel.id.get());
-        sqlx::query_file!(
-            "./src/queries/member_management/add_or_update_welcome_channel.sql",
-            guild_id_i64,
-            channel_id_i64
+        welcome_channel::Entity::insert(welcome_channel::ActiveModel {
+            guild_id: Set(id_to_string(guild_id.clone())),
+            channel_id: Set(id_to_string(channel.id.clone())),
+        })
+        .on_conflict(
+            OnConflict::column(welcome_channel::Column::GuildId)
+                .update_columns([welcome_channel::Column::ChannelId])
+                .to_owned(),
         )
-        .execute(&mut *conn)
+        .exec(&ctx.data().db_pool)
         .await?;
         ctx.send(
             CreateReply::default()
@@ -109,12 +73,9 @@ pub async fn configure_welcome_channel(
         )
         .await?;
     } else {
-        sqlx::query_file!(
-            "./src/queries/member_management/delete_welcome_channel.sql",
-            guild_id_i64
-        )
-        .execute(&mut *conn)
-        .await?;
+        welcome_channel::Entity::delete_by_id(id_to_string(guild_id))
+            .exec(&ctx.data().db_pool)
+            .await?;
 
         ctx.send(
             CreateReply::default()
@@ -137,31 +98,14 @@ pub async fn configure_welcome_channel(
 pub async fn add_default_member_role(ctx: Context<'_>, role: RoleId) -> Result<(), Error> {
     trace!("adding default member role: {:?}", role);
     let guild_id = require_guild_id(ctx)?;
-    let mut conn = match ctx.data().db_pool.acquire().await {
-        Ok(c) => c,
-        Err(e) => {
-            warn!("DB connection failed: {}", e);
-            return Err(e.into());
-        }
-    };
 
-    let guild_id_i64 = lossless_u64_to_i64(guild_id.get());
-    let channel_id_i64 = lossless_u64_to_i64(role.get());
-    let query_result = sqlx::query_file!(
-        "./src/queries/member_management/add_member_role_on_join.sql",
-        guild_id_i64,
-        channel_id_i64
-    )
-    .execute(&mut *conn)
+    welcome_roles::Entity::insert(welcome_roles::ActiveModel {
+        guild_id: Set(id_to_string(guild_id.clone())),
+        role_id: Set(id_to_string(role.clone())),
+    })
+    .exec(&ctx.data().db_pool)
     .await?;
 
-    if query_result.rows_affected() != 1 {
-        warn!(
-            "Unexpected query result while adding default member role: {:?}",
-            query_result
-        );
-        return Err("Failed to add default member role".into());
-    }
     ctx.send(
         CreateReply::default()
             .content("Successfully added default role")
@@ -184,13 +128,6 @@ pub async fn remove_default_member_role(
 ) -> Result<(), Error> {
     trace!("deleting default member role: {:?}", role);
     let guild_id = require_guild_id(ctx)?;
-    let mut conn = match ctx.data().db_pool.acquire().await {
-        Ok(c) => c,
-        Err(e) => {
-            warn!("DB connection failed: {}", e);
-            return Err(e.into());
-        }
-    };
 
     let role_id = match guild_id.roles(ctx).await {
         Ok(roles) => roles
@@ -202,23 +139,10 @@ pub async fn remove_default_member_role(
 
     match role_id {
         Some(role_id) => {
-            let guild_id_i64 = lossless_u64_to_i64(guild_id.get());
-            let channel_id_i64 = lossless_u64_to_i64(role_id.get());
-            let query_result = sqlx::query_file!(
-                "./src/queries/member_management/remove_member_role_on_join.sql",
-                guild_id_i64,
-                channel_id_i64
-            )
-            .execute(&mut *conn)
-            .await?;
+            welcome_roles::Entity::delete_by_id((id_to_string(guild_id), id_to_string(role_id)))
+                .exec(&ctx.data().db_pool)
+                .await?;
 
-            if query_result.rows_affected() != 1 {
-                warn!(
-                    "Unexpected query result while removing default member role: {:?}",
-                    query_result
-                );
-                return Err("Failed to remove default member role".into());
-            }
             ctx.send(
                 CreateReply::default()
                     .content("Successfully removed default role")

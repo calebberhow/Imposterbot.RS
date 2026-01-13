@@ -4,8 +4,6 @@
     Adds specified role(s) to new members.
 */
 
-use std::sync::Arc;
-
 use poise::{
     CreateReply,
     serenity_prelude::{
@@ -13,78 +11,45 @@ use poise::{
         GuildId, Member, RoleId, User, futures::future,
     },
 };
-use sqlx::SqlitePool;
-use tracing::{error, trace, warn};
+use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
+use tracing::{error, trace};
 
 use crate::{
-    Error,
+    Error, entities,
     infrastructure::{
         botdata::Data,
         colors,
-        util::{
-            get_media_directory, lossless_i64_to_u64, lossless_u64_to_i64, send_message_from_reply,
-        },
+        util::{get_media_directory, id_from_string, id_to_string, send_message_from_reply},
     },
 };
 
-async fn get_welcome_channel(db_pool: Arc<SqlitePool>, guild_id: &GuildId) -> Option<ChannelId> {
-    let mut conn = match db_pool.acquire().await {
-        Ok(c) => c,
-        Err(e) => {
-            warn!("DB connection failed: {}", e);
-            return None;
-        }
-    };
+async fn get_welcome_channel(db: &DatabaseConnection, guild_id: &GuildId) -> Option<ChannelId> {
+    let query_result = entities::welcome_channel::Entity::find_by_id(id_to_string(*guild_id))
+        .one(db)
+        .await;
 
-    struct WelcomeChannelResult {
-        channel_id: i64,
-    }
-
-    let guild_id_i64 = lossless_u64_to_i64(guild_id.get());
-    let query_result = sqlx::query_file_as!(
-        WelcomeChannelResult,
-        "./src/queries/member_management/get_welcome_channel.sql",
-        guild_id_i64
-    )
-    .fetch_one(&mut *conn)
-    .await;
-
-    match query_result {
-        Ok(result) => Some(ChannelId::new(lossless_i64_to_u64(result.channel_id))),
-        Err(_) => None,
+    match query_result.ok().flatten() {
+        Some(model) => id_from_string::<ChannelId>(model.channel_id.as_str()).ok(),
+        _ => None,
     }
 }
 
-async fn get_member_roles_on_join(
-    db_pool: Arc<SqlitePool>,
+pub async fn get_member_roles_on_join(
+    db: &DatabaseConnection,
     guild_id: &GuildId,
 ) -> Option<Vec<RoleId>> {
-    let mut conn = match db_pool.acquire().await {
-        Ok(c) => c,
-        Err(e) => {
-            warn!("DB connection failed: {}", e);
-            return None;
-        }
-    };
-
-    struct RoleResult {
-        role_id: i64,
-    }
-
-    let guild_id_i64 = lossless_u64_to_i64(guild_id.get());
-    let query_result = sqlx::query_file_as!(
-        RoleResult,
-        "./src/queries/member_management/get_member_roles_on_join.sql",
-        guild_id_i64
-    )
-    .fetch_all(&mut *conn)
-    .await;
+    let query_result = entities::welcome_roles::Entity::find()
+        .filter(entities::welcome_roles::Column::GuildId.eq(id_to_string(*guild_id)))
+        .one(db)
+        .await;
 
     match query_result {
         Ok(result) => Some(
             result
                 .iter()
-                .map(|role| RoleId::new(lossless_i64_to_u64(role.role_id)))
+                .map(|role| id_from_string::<RoleId>(role.role_id.as_str()))
+                .filter(|result| result.is_ok())
+                .map(|result| result.expect("Failed results should have been filtered out"))
                 .collect(),
         ),
         Err(e) => {
@@ -96,7 +61,7 @@ async fn get_member_roles_on_join(
 
 async fn say_hello(ctx: &Context, data: &Data, member: &Member) -> Result<(), Error> {
     let (welcome_channel, guild) = future::join(
-        get_welcome_channel(data.db_pool.clone(), &member.guild_id),
+        get_welcome_channel(&data.db_pool, &member.guild_id),
         member.guild_id.to_partial_guild_with_counts(ctx), // TODO: this request is quite large and slow. Figure out how to more quickly retrieve the guild member count.
     )
     .await;
@@ -138,7 +103,7 @@ async fn say_goodbye(
     data: &Data,
     user: &User,
 ) -> Result<(), Error> {
-    let channel = match get_welcome_channel(data.db_pool.clone(), guild_id).await {
+    let channel = match get_welcome_channel(&data.db_pool, guild_id).await {
         Some(x) => x,
         None => return Ok(()),
     };
@@ -155,7 +120,7 @@ async fn add_initial_member_roles(
     new_member: &Member,
 ) -> Result<(), Error> {
     trace!("Added initial roles to {}", new_member.user.name);
-    match get_member_roles_on_join(data.db_pool.clone(), &new_member.guild_id).await {
+    match get_member_roles_on_join(&data.db_pool, &new_member.guild_id).await {
         Some(roles) => match new_member.add_roles(ctx, &roles).await {
             Ok(_) => Ok(()),
             Err(e) => Err(e.into()),

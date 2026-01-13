@@ -1,0 +1,20 @@
+[package]
+name = "migration"
+version = "0.1.0"
+publish = false
+edition = "2021"
+
+[lib]
+name = "migration"
+path = "src/lib.rs"
+
+[dependencies]
+async-std = { version = "1", features = ["attributes", "tokio1"] }
+
+[dependencies.sea-orm-migration]
+version = "1.1.19"
+features = [
+  # View the list of supported features at https://www.sea-ql.org/SeaORM/docs/install-and-config/database-and-async-runtime.
+  "runtime-tokio-rustls", # `ASYNC_RUNTIME` feature
+  "sqlx-sqlite",          # `DATABASE_DRIVER` feature
+]

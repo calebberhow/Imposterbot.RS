@@ -13,9 +13,6 @@ RUN apt-get update && \
     apt-get install -y pkg-config libssl-dev && \
     rm -rf /var/lib/apt/lists/*
 
-# Install sqlx
-RUN cargo install sqlx-cli
-
 ########################################################################################################################
 # Cargo chef prepare
 ########################################################################################################################
@@ -33,13 +30,11 @@ ARG DATABASE_URL=sqlite:/imposterbot_data.db
 
 # Build and cache dependencies separately from app build
 COPY --from=planner /app/recipe.json recipe.json
+COPY migration migration
 RUN cargo chef cook --target x86_64-unknown-linux-musl --release --recipe-path recipe.json
 
 # Copy source
 COPY . .
-
-# Setup temp database (required for build)
-RUN cargo sqlx database setup
 
 # Configure app user
 RUN groupadd --gid 10001 appgroup && \
@@ -63,7 +58,6 @@ COPY --from=builder /etc/passwd /etc/passwd
 COPY --from=builder /etc/group /etc/group
 
 COPY --from=builder --chown=appuser:appgroup ./target/x86_64-unknown-linux-musl/release/imposterbot /app/imposterbot
-COPY ./migrations /migrations
 COPY ./media /media
 
 # TODO: Setting the user prevents write access to /data volume
