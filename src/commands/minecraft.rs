@@ -375,6 +375,22 @@ pub async fn update_mcserver(
         return Err(format!("Server '{}' does not exist.", name).into());
     }
 
+    if address.is_none()
+        && port.is_none()
+        && version.is_none()
+        && clear_version.is_none()
+        && modpack.is_none()
+        && clear_modpack.is_none()
+        && custom_description.is_none()
+        && clear_custom_description.is_none()
+        && instructions.is_none()
+        && clear_instructions.is_none()
+        && thumbnail.is_none()
+        && clear_thumbnail.is_none()
+    {
+        return Err("At least one parameter must be updated.".into());
+    }
+
     let port_value = match port {
         Some(x) => {
             if x > 0 {
@@ -391,17 +407,6 @@ pub async fn update_mcserver(
     let custom_description = apply_clear(custom_description, clear_custom_description);
     let instructions = apply_clear(instructions, clear_instructions);
     let thumbnail = apply_clear(thumbnail, clear_thumbnail);
-
-    if address.is_none()
-        && port.is_none()
-        && version.is_none()
-        && modpack.is_none()
-        && custom_description.is_none()
-        && instructions.is_none()
-        && thumbnail.is_none()
-    {
-        return Err("At least one parameter must be updated.".into());
-    }
 
     let guild_id = require_guild_id(ctx)?;
     let mut model = mc_server::ActiveModel {
