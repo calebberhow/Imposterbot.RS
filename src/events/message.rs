@@ -3,12 +3,12 @@ use crate::{
     infrastructure::{botdata::Data, ids, util::send_message_from_reply},
     lazy_regex,
 };
-use log::{info, warn};
 use poise::{
     CreateReply,
     serenity_prelude::{Context, Emoji, GuildId, Http, Message, ReactionType},
 };
 use rand::seq::IndexedRandom;
+use tracing::{info, warn};
 
 lazy_regex! { BODY_REGEX, r"\bbody+\b"}
 lazy_regex! { RED_SUS_REGEX, r"\bred sus\b"}

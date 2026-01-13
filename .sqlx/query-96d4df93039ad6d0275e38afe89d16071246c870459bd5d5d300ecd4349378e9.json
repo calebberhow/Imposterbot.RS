@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT role_id\r\nFROM member_roles_on_join\r\nWHERE guild_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "role_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "96d4df93039ad6d0275e38afe89d16071246c870459bd5d5d300ecd4349378e9"
+}

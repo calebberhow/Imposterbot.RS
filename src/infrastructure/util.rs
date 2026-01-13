@@ -3,11 +3,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use log::trace;
 use poise::{
     CreateReply,
-    serenity_prelude::{ChannelId, CreateMessage, GuildId},
+    serenity_prelude::{ChannelId, CreateMessage, GuildId, Typing},
 };
+use tracing::trace;
 
 use crate::{Context, Error, infrastructure::environment};
 
@@ -108,4 +108,28 @@ pub async fn send_message_from_reply(
     trace!("Sending message: {:?}", debuggable);
     channel.send_message(ctx, create_message).await?;
     Ok(())
+}
+
+/// Appropriately indicates to the end user that imposterbot is working on a response.
+/// - For Application (/) commands, this is a message in response to the interation that says "Imposterbot is thinking..."
+/// - For prefix commands, this is indicated by "Imposterbot is typing" hint, as if a real person is typing a message.
+///
+/// Note:
+/// When the returned result goes out of scope, is dropped, or Typing.stop() is called, the typing hint will disappear.
+pub async fn defer_or_broadcast(
+    ctx: Context<'_>,
+    ephemeral: bool,
+) -> Result<Option<Typing>, Error> {
+    match ctx {
+        poise::Context::Application(appctx) => {
+            appctx.defer_response(ephemeral).await?;
+            Ok(None)
+        }
+        poise::Context::Prefix(prefixctx) => Ok(Some(
+            prefixctx
+                .msg
+                .channel_id
+                .start_typing(&prefixctx.serenity_context.http),
+        )),
+    }
 }

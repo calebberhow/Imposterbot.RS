@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM member_roles_on_join\r\nWHERE guild_id = ? AND role_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "0935edd63872f4abd6fbb2d60203f8cc02f0750ff77098faef7918d03dca7668"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO member_roles_on_join (guild_id, role_id)\r\nVALUES (?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "9da0ceca2ac5bed53d5345c23d995d4dfe9b14fd40ea0148b784ff4ab3ee2723"
+}

@@ -1,4 +1,3 @@
-use log::{trace, warn};
 use poise::{
     CreateReply,
     serenity_prelude::{
@@ -6,6 +5,7 @@ use poise::{
         futures::{self, Stream, StreamExt},
     },
 };
+use tracing::{debug, trace, warn};
 
 use crate::{
     Context, Error,
@@ -18,7 +18,10 @@ async fn default_role_autocomplete<'a>(
     partial: &'a str,
 ) -> impl Stream<Item = String> + 'a {
     // Get guild id
-    trace!(partial=partial; "default_role_autocomplete executed with args");
+    debug!(
+        partial = partial,
+        "default_role_autocomplete executed with args"
+    );
     let guild_id = match require_guild_id(ctx) {
         Ok(id) => id,
         Err(_) => return futures::stream::empty().boxed(),
@@ -42,7 +45,7 @@ async fn default_role_autocomplete<'a>(
 
         let mut rows = sqlx::query_file_as!(
             RoleObj,
-            "./src/queries/get_member_roles_on_join.sql",
+            "./src/queries/member_management/get_member_roles_on_join.sql",
             guild_id_value
         )
         .fetch(&mut *conn);
@@ -93,7 +96,7 @@ pub async fn configure_welcome_channel(
     if let Some(channel) = channel {
         let channel_id_i64 = lossless_u64_to_i64(channel.id.get());
         sqlx::query_file!(
-            "./src/queries/add_or_update_welcome_channel.sql",
+            "./src/queries/member_management/add_or_update_welcome_channel.sql",
             guild_id_i64,
             channel_id_i64
         )
@@ -106,9 +109,12 @@ pub async fn configure_welcome_channel(
         )
         .await?;
     } else {
-        sqlx::query_file!("./src/queries/delete_welcome_channel.sql", guild_id_i64)
-            .execute(&mut *conn)
-            .await?;
+        sqlx::query_file!(
+            "./src/queries/member_management/delete_welcome_channel.sql",
+            guild_id_i64
+        )
+        .execute(&mut *conn)
+        .await?;
 
         ctx.send(
             CreateReply::default()
@@ -142,7 +148,7 @@ pub async fn add_default_member_role(ctx: Context<'_>, role: RoleId) -> Result<(
     let guild_id_i64 = lossless_u64_to_i64(guild_id.get());
     let channel_id_i64 = lossless_u64_to_i64(role.get());
     let query_result = sqlx::query_file!(
-        "./src/queries/add_member_role_on_join.sql",
+        "./src/queries/member_management/add_member_role_on_join.sql",
         guild_id_i64,
         channel_id_i64
     )
@@ -199,7 +205,7 @@ pub async fn remove_default_member_role(
             let guild_id_i64 = lossless_u64_to_i64(guild_id.get());
             let channel_id_i64 = lossless_u64_to_i64(role_id.get());
             let query_result = sqlx::query_file!(
-                "./src/queries/remove_member_role_on_join.sql",
+                "./src/queries/member_management/remove_member_role_on_join.sql",
                 guild_id_i64,
                 channel_id_i64
             )

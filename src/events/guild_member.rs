@@ -6,7 +6,6 @@
 
 use std::sync::Arc;
 
-use log::{error, trace, warn};
 use poise::{
     CreateReply,
     serenity_prelude::{
@@ -15,6 +14,7 @@ use poise::{
     },
 };
 use sqlx::SqlitePool;
+use tracing::{error, trace, warn};
 
 use crate::{
     Error,
@@ -43,7 +43,7 @@ async fn get_welcome_channel(db_pool: Arc<SqlitePool>, guild_id: &GuildId) -> Op
     let guild_id_i64 = lossless_u64_to_i64(guild_id.get());
     let query_result = sqlx::query_file_as!(
         WelcomeChannelResult,
-        "./src/queries/get_welcome_channel.sql",
+        "./src/queries/member_management/get_welcome_channel.sql",
         guild_id_i64
     )
     .fetch_one(&mut *conn)
@@ -74,7 +74,7 @@ async fn get_member_roles_on_join(
     let guild_id_i64 = lossless_u64_to_i64(guild_id.get());
     let query_result = sqlx::query_file_as!(
         RoleResult,
-        "./src/queries/get_member_roles_on_join.sql",
+        "./src/queries/member_management/get_member_roles_on_join.sql",
         guild_id_i64
     )
     .fetch_all(&mut *conn)

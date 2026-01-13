@@ -1,5 +1,7 @@
-use log::{info, warn};
+use std::time::Duration;
+
 use poise::serenity_prelude::{Context, FullEvent};
+use tracing::{debug, info, warn};
 
 use crate::{
     Error,
@@ -40,6 +42,30 @@ pub async fn event_handler(
             let result = guild_member_remove(ctx, data, guild_id, user).await;
             if let Err(e) = result {
                 warn!("Guild member removed handler produced an error: {:?}", e);
+            }
+        }
+        FullEvent::InteractionCreate { interaction } => {
+            let ping = match framework
+                .shard_manager
+                .runners
+                .lock()
+                .await
+                .get(&ctx.shard_id)
+            {
+                Some(runner) => runner.latency.unwrap_or(std::time::Duration::ZERO),
+                None => {
+                    tracing::error!(
+                        "current shard is not in shard_manager.runners, this shouldn't happen"
+                    );
+                    std::time::Duration::ZERO
+                }
+            };
+            if ping > Duration::default() {
+                debug!(
+                    "Ping measured for interaction type {:?}: {:?} ",
+                    interaction.kind(),
+                    ping
+                )
             }
         }
         _ => {}

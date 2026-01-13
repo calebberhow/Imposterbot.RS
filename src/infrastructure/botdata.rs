@@ -1,11 +1,11 @@
-use std::sync::Arc;
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+};
 
 use sqlx::SqlitePool;
-use tokio::sync::RwLock;
-
-use crate::commands::minecraft::McServerList;
 
 pub struct Data {
-    pub mcserver_list: Arc<RwLock<McServerList>>,
     pub db_pool: Arc<SqlitePool>,
+    pub invoc_time: Arc<RwLock<HashMap<u64, std::time::Instant>>>,
 }

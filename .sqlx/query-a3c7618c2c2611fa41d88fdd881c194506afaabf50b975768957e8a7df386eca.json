@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO mcservers (\r\n        guild_id,\r\n        name,\r\n        address,\r\n        port,\r\n        version,\r\n        modpack,\r\n        custom_description,\r\n        instructions,\r\n        thumbnail\r\n    )\r\nVALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 9
+    },
+    "nullable": []
+  },
+  "hash": "a3c7618c2c2611fa41d88fdd881c194506afaabf50b975768957e8a7df386eca"
+}

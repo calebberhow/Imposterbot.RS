@@ -2,17 +2,16 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use env_logger::{Builder, Env};
 use imposterbot::infrastructure::botdata::Data;
+use imposterbot::infrastructure::environment;
 use imposterbot::infrastructure::util::get_data_directory;
-use imposterbot::{commands::minecraft::McServerList, infrastructure::environment};
-use log::{error, info, warn};
 use poise::serenity_prelude::{self as serenity, GatewayIntents, UserId};
 use sqlx::SqlitePool;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
-use tokio::sync::RwLock;
+use tracing::{debug, error, info, warn};
 
 fn get_log_path_var() -> Option<bool> {
     match std::env::var(environment::LOG_PATH) {
@@ -34,7 +33,7 @@ fn init_env_logger() {
     Builder::from_env(env)
         .default_format()
         .format_source_path(get_log_path_var().unwrap_or(false))
-        .format_timestamp_secs()
+        .format_timestamp_millis()
         .init();
 }
 
@@ -150,26 +149,6 @@ fn get_enabled_commands() -> Vec<poise::Command<Data, imposterbot::Error>> {
         .collect()
 }
 
-async fn get_init_mcsever_list(pool: Arc<SqlitePool>) -> McServerList {
-    match McServerList::from_db(pool.clone()).await {
-        Ok(list) => {
-            info!(
-                "Loaded {} Minecraft server configurations from database during startup.",
-                list.servers.len()
-            );
-            return list;
-        }
-        Err(e) => {
-            error!(
-                "Failed to load Minecraft server configurations from database during startup: {:?}",
-                e
-            );
-
-            return McServerList::default();
-        }
-    }
-}
-
 enum OwnerParseError {
     MissingEnvVar,
     UserIdParseError(String),
@@ -232,8 +211,31 @@ fn create_discord_framework(pool: Arc<SqlitePool>) -> poise::Framework<Data, imp
                             .member
                             .and_then(|m| m.nick)
                             .unwrap_or(ctx.author().display_name().to_string()),
-                        ctx.author().name
+                        ctx.author().name,
                     );
+
+                    ctx.data()
+                        .invoc_time
+                        .write()
+                        .unwrap()
+                        .insert(ctx.id(), Instant::now());
+                })
+            },
+            post_command: |ctx| {
+                Box::pin(async move {
+                    let invoc_time_map = ctx.data().invoc_time.read().unwrap();
+                    let start_time = invoc_time_map.get(&ctx.id());
+                    match start_time {
+                        Some(start_time) => {
+                            let duration = start_time.elapsed();
+                            debug!("Command {} finished in {:?}", ctx.command().name, duration);
+                        }
+                        None => {
+                            error!(
+                                "Post-command hook called for command without a start-time set."
+                            );
+                        }
+                    }
                 })
             },
             on_error: |error| {
@@ -252,10 +254,9 @@ fn create_discord_framework(pool: Arc<SqlitePool>) -> poise::Framework<Data, imp
         })
         .setup(|_ctx, _ready, _framework| {
             Box::pin(async move {
-                let init_server_list = get_init_mcsever_list(pool.clone()).await;
                 Ok(Data {
-                    mcserver_list: Arc::new(RwLock::new(init_server_list)),
                     db_pool: pool,
+                    invoc_time: Default::default(),
                 })
             })
         })

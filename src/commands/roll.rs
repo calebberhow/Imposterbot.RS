@@ -1,13 +1,13 @@
-use log::trace;
 use poise::{
     CreateReply,
     serenity_prelude::{Colour, CreateAttachment, CreateEmbed, CreateEmbedAuthor},
 };
 use rand::Rng;
+use tracing::trace;
 
 use crate::{
     Context, Error,
-    infrastructure::util::{DebuggableReply, get_media_directory},
+    infrastructure::util::{DebuggableReply, defer_or_broadcast, get_media_directory},
 };
 
 #[derive(Debug, poise::ChoiceParameter, Clone, Copy)]
@@ -40,7 +40,7 @@ fn dice_number(dice: &Dice) -> u8 {
 fn roll_dice(dice: &Dice) -> u8 {
     let mut rng = rand::rng();
     let value = rng.random_range(1..=dice_number(dice)) as u8;
-    trace!(value=value; "Generated");
+    trace!(value = value, "Generated");
     value
 }
 
@@ -84,7 +84,13 @@ pub async fn roll(
     #[description = "The type of die to roll"] dice: Dice,
     #[description = "Visible to you only? (default: false)"] ephemeral: Option<bool>,
 ) -> Result<(), Error> {
-    trace!(dice=dice.as_str(), ephemeral=ephemeral; "Coinflip executed with args");
+    trace!(
+        dice = dice.as_str(),
+        ephemeral = ephemeral,
+        "Coinflip executed with args"
+    );
+    let _typing = defer_or_broadcast(ctx, ephemeral.unwrap_or_default()).await?;
+
     let side = roll_dice(&dice);
     let attachment = get_dice_attachment(&dice, side).await?;
 
@@ -111,7 +117,7 @@ pub async fn roll(
     let reply = CreateReply::default()
         .embed(embed)
         .attachment(attachment)
-        .ephemeral(ephemeral.unwrap_or(false));
+        .ephemeral(ephemeral.unwrap_or_default());
     trace!("Sending reply: {:?}", DebuggableReply::new(&reply));
     ctx.send(reply).await?;
     Ok(())

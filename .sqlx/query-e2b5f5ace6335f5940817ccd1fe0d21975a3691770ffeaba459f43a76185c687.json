@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM mcservers \r\nWHERE guild_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "e2b5f5ace6335f5940817ccd1fe0d21975a3691770ffeaba459f43a76185c687"
+}

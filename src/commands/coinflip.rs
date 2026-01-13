@@ -1,18 +1,21 @@
-use log::trace;
 use poise::{CreateReply, serenity_prelude::CreateEmbed};
 use rand::Rng;
+use tracing::{debug, trace};
 
 use crate::{
     Context, Error,
-    infrastructure::{colors, util::DebuggableReply},
+    infrastructure::{
+        colors,
+        util::{DebuggableReply, defer_or_broadcast},
+    },
 };
 
 fn do_flip(probability: Option<f64>) -> bool {
     let mut rand = rand::rng();
     let p = probability.unwrap_or(0.5);
-    trace!(probability=p; "Generating bool with probability");
+    trace!(probability = p, "Generating bool with probability");
     let value = rand.random_bool(p);
-    trace!(value=value; "Generated");
+    trace!(value = value, "Generated");
     value
 }
 
@@ -22,7 +25,12 @@ pub async fn coinflip(
     #[description = "Visible to you only? (default: false)"] ephemeral: Option<bool>,
     #[description = "Probability of heads (default: 0.5)"] probability: Option<f64>,
 ) -> Result<(), Error> {
-    trace!(ephemeral=ephemeral, probability=probability; "Coinflip executed with args");
+    debug!(
+        ephemeral = ephemeral,
+        probability = probability,
+        "Coinflip executed with args",
+    );
+    let _typing = defer_or_broadcast(ctx, ephemeral.unwrap_or_default()).await?;
 
     if probability.is_some() && !matches!(probability.unwrap(), 0.0..=1.0) {
         return Err("Probability out of range".into());

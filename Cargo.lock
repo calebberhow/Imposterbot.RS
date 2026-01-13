@@ -1131,7 +1131,6 @@ dependencies = [
  "async-stream",
  "dotenvy",
  "env_logger",
- "log",
  "once_cell",
  "paste",
  "poise",
@@ -1139,6 +1138,7 @@ dependencies = [
  "regex",
  "sqlx",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
