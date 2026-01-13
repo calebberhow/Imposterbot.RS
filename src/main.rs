@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use env_logger::{Builder, Env};
+
 use imposterbot::infrastructure::botdata::Data;
 use imposterbot::infrastructure::environment;
 use imposterbot::infrastructure::util::get_data_directory;
@@ -278,8 +279,42 @@ async fn main() {
     let intents = serenity::GatewayIntents::non_privileged()
         .union(GatewayIntents::MESSAGE_CONTENT)
         .union(GatewayIntents::GUILD_MEMBERS);
-    let client = serenity::ClientBuilder::new(token, intents)
+    let mut client = serenity::ClientBuilder::new(token, intents)
         .framework(framework)
+        .await
+        .unwrap();
+    let client_future = client.start();
+
+    tokio::select! {
+        _ = termination() => {
+            info!("Bot is shutting down!");
+            client.shard_manager.shutdown_all().await;
+        }
+        _ = client_future => {
+            error!("Bot event loop closed unexpectedly. Shutting down.");
+        }
+    }
+}
+
+#[cfg(windows)]
+async fn termination() -> tokio::io::Result<()> {
+    tokio::signal::ctrl_c().await
+}
+
+#[cfg(unix)]
+async fn termination() -> tokio::io::Result<()> {
+    let sigint = tokio::signal::ctrl_c();
+    let sigterm = sigterm();
+    tokio::select! {
+        res = sigint => res,
+        res = sigterm => res
+    }
+}
+
+#[cfg(unix)]
+async fn sigterm() -> tokio::io::Result<()> {
+    tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?
+        .recv()
         .await;
-    client.unwrap().start().await.unwrap();
+    Ok(())
 }
