@@ -398,6 +398,7 @@ pub async fn update_mcserver(
         && modpack.is_none()
         && custom_description.is_none()
         && instructions.is_none()
+        && thumbnail.is_none()
     {
         return Err("At least one parameter must be updated.".into());
     }
