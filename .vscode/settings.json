@@ -8,5 +8,9 @@
             "name": "imposterbot_data",
             "group": "imposterbot"
         }
+    ],
+    "githubRepositories.autoFetch.enabled": false,
+    "rust-analyzer.cargo.features": [
+        "voice"
     ]
 }

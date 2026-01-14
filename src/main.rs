@@ -13,6 +13,9 @@ use poise::serenity_prelude::{self as serenity, GatewayIntents, UserId};
 use sea_orm::{ConnectOptions, Database, DatabaseConnection};
 use tracing::{debug, error, info, warn};
 
+#[cfg(feature = "voice")]
+use songbird::SerenityInit;
+
 fn get_log_path_var() -> Option<bool> {
     match std::env::var(environment::LOG_PATH) {
         Ok(path) => match path.parse::<bool>() {
@@ -92,7 +95,7 @@ fn get_discord_token() -> String {
 }
 
 fn get_enabled_commands() -> Vec<poise::Command<Data, imposterbot::Error>> {
-    let default_commands = vec![
+    let mut default_commands = vec![
         imposterbot::commands::builtins::help(),
         imposterbot::commands::builtins::register(),
         imposterbot::commands::minecraft::mcstatus(),
@@ -107,6 +110,11 @@ fn get_enabled_commands() -> Vec<poise::Command<Data, imposterbot::Error>> {
         imposterbot::commands::member_management::test_member_add(),
         imposterbot::commands::member_management::test_member_remove(),
     ];
+
+    #[cfg(feature = "voice")]
+    {
+        default_commands.push(imposterbot::commands::voice::play());
+    }
 
     // Get the list of commands disabled by environment variable
     let disable_commands_env = std::env::var("COMMAND_DISABLE_LIST").unwrap_or_default();
@@ -273,12 +281,19 @@ async fn main() {
     ensure_data_dir_created().expect("Data directory should be creatable");
     let pool = create_db_pool().await;
     init_db(&pool).await.unwrap();
-
     let framework = create_discord_framework(pool);
 
     let intents = serenity::GatewayIntents::non_privileged()
         .union(GatewayIntents::MESSAGE_CONTENT)
         .union(GatewayIntents::GUILD_MEMBERS);
+    #[cfg(feature = "voice")]
+    let mut client = serenity::ClientBuilder::new(token, intents)
+        .framework(framework)
+        .register_songbird()
+        .type_map_insert::<imposterbot::commands::voice::HttpKey>(reqwest::Client::new())
+        .await
+        .unwrap();
+    #[cfg(not(feature = "voice"))]
     let mut client = serenity::ClientBuilder::new(token, intents)
         .framework(framework)
         .await

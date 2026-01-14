@@ -8,6 +8,8 @@ pub mod commands {
     pub mod member_management;
     pub mod minecraft;
     pub mod roll;
+    #[cfg(feature = "voice")]
+    pub mod voice;
 }
 
 pub mod infrastructure {
