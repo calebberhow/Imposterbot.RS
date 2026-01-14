@@ -5,7 +5,8 @@ edition = "2024"
 
 [features]
 default = []
-voice = ["songbird"]
+# Voice feature requires cmake, and a c compiler as a developer dependency and yt-dlp as a prod dependency.
+voice = ["dep:songbird", "dep:symphonia"]
 
 [dependencies]
 async-minecraft-ping = { git = "https://github.com/jsvana/async-minecraft-ping", branch = "master", features = [
@@ -23,4 +24,14 @@ tokio = { version = "1.49.0", features = ["full"] }
 tracing = "0.1.44"
 migration = { path = "./migration" }
 sea-orm = { version = "1.1.19", features = ["macros"] }
-songbird = {version = "0.5.0", optional = true }
+reqwest = "0.12.28"
+
+[dependencies.songbird]
+version = "0.5"
+features = ["builtin-queue"]
+optional = true
+
+[dependencies.symphonia]
+version = "0.5"
+features = ["aac", "mp3", "isomp4", "alac"] # ...as well as any extras you need!
+optional = true

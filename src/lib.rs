@@ -9,7 +9,7 @@ pub mod commands {
     pub mod minecraft;
     pub mod roll;
     #[cfg(feature = "voice")]
-    pub mod mariah;
+    pub mod voice;
 }
 
 pub mod infrastructure {

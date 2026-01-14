@@ -3,15 +3,14 @@
 ########################################################################################################################
 
 FROM lukemathwalker/cargo-chef:latest-rust-1 AS toolchain
-RUN rustup target add x86_64-unknown-linux-musl && \
-    apt update && \
-    apt install -y musl-tools musl-dev && \
-    update-ca-certificates
 
-# Install OpenSSL development libraries and pkg-config
+# CMake and C compiler are required to build openssl from C source code for songbird
 RUN apt-get update && \
-    apt-get install -y pkg-config libssl-dev libopus-dev build-essential autoconf automake libtool m4 && \
-    rm -rf /var/lib/apt/lists/*
+    apt-get install -y \
+    pkg-config \
+    build-essential \
+    cmake \
+    && rm -rf /var/lib/apt/lists/*
 
 ########################################################################################################################
 # Cargo chef prepare
@@ -31,7 +30,7 @@ ARG DATABASE_URL=sqlite:/imposterbot_data.db
 # Build and cache dependencies separately from app build
 COPY --from=planner /app/recipe.json recipe.json
 COPY migration migration
-RUN cargo chef cook --target x86_64-unknown-linux-musl --release --recipe-path recipe.json --features "voice"
+RUN cargo chef cook --release --recipe-path recipe.json --features "voice"
 
 # Copy source
 COPY . .
@@ -41,7 +40,7 @@ RUN groupadd --gid 10001 appgroup && \
     useradd --uid 10001 --gid appgroup --shell /bin/bash --create-home appuser
 
 # Build app
-RUN cargo build --target x86_64-unknown-linux-musl --release --features "voice"
+RUN cargo build --release --features "voice"
 
 ########################################################################################################################
 # Imposterbot image
@@ -57,8 +56,16 @@ ENV MEDIA_DIRECTORY=/media
 COPY --from=builder /etc/passwd /etc/passwd
 COPY --from=builder /etc/group /etc/group
 
-COPY --from=builder --chown=appuser:appgroup ./target/x86_64-unknown-linux-musl/release/imposterbot /app/imposterbot
+COPY --from=builder --chown=appuser:appgroup ./target/release/imposterbot /app/imposterbot
 COPY ./media /media
+
+COPY ./deps/yt-dlp /usr/local/bin/yt-dlp
+
+## App is dynamically linked to libopus
+# yt-dlp requires python3 executable during runtime.
+RUN apt-get update && \
+    apt-get install -y libopus0 python3 && \
+    rm -rf /var/lib/apt/lists/*
 
 # TODO: Setting the user prevents write access to /data volume
 # USER appuser

@@ -1,0 +1,3 @@
+[env]
+# Required cmake environment variable in order to compile opus from source.
+CMAKE_POLICY_VERSION_MINIMUM = "3.5"
