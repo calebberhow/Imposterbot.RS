@@ -98,10 +98,7 @@ fn get_enabled_commands() -> Vec<poise::Command<Data, imposterbot::Error>> {
     let mut default_commands = vec![
         imposterbot::commands::builtins::help(),
         imposterbot::commands::builtins::register(),
-        imposterbot::commands::minecraft::mcstatus(),
-        imposterbot::commands::minecraft::rm_mcserver(),
-        imposterbot::commands::minecraft::add_mcserver(),
-        imposterbot::commands::minecraft::update_mcserver(),
+        imposterbot::commands::minecraft::mc(),
         imposterbot::commands::roll::roll(),
         imposterbot::commands::coinflip::coinflip(),
         imposterbot::commands::member_management::configure_welcome_channel(),

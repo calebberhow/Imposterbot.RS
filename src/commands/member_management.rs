@@ -40,12 +40,14 @@ async fn default_role_autocomplete<'a>(
     futures::stream::iter(roles).boxed()
 }
 
+/// Configures a channel for the bot to send welcome and goodbye messages to.
 #[poise::command(
     slash_command,
     prefix_command,
     required_permissions = "ADMINISTRATOR",
     default_member_permissions = "ADMINISTRATOR",
-    guild_only
+    guild_only,
+    category = "Management"
 )]
 pub async fn configure_welcome_channel(
     ctx: Context<'_>,
@@ -88,12 +90,14 @@ pub async fn configure_welcome_channel(
     Ok(())
 }
 
+/// Adds a role that will be applied to all new members when they join.
 #[poise::command(
     slash_command,
     prefix_command,
     required_permissions = "ADMINISTRATOR",
     default_member_permissions = "ADMINISTRATOR",
-    guild_only
+    guild_only,
+    category = "Management"
 )]
 pub async fn add_default_member_role(ctx: Context<'_>, role: RoleId) -> Result<(), Error> {
     trace!("adding default member role: {:?}", role);
@@ -115,12 +119,14 @@ pub async fn add_default_member_role(ctx: Context<'_>, role: RoleId) -> Result<(
     Ok(())
 }
 
+/// Removes a role that is applied to all new members when they join.
 #[poise::command(
     slash_command,
     prefix_command,
     required_permissions = "ADMINISTRATOR",
     default_member_permissions = "ADMINISTRATOR",
-    guild_only
+    guild_only,
+    category = "Management"
 )]
 pub async fn remove_default_member_role(
     ctx: Context<'_>,
@@ -163,7 +169,15 @@ pub async fn remove_default_member_role(
     Ok(())
 }
 
-#[poise::command(slash_command, prefix_command, owners_only, guild_only)]
+/// Tests the welcome functions by simulating a member joining the guild.
+#[poise::command(
+    slash_command,
+    prefix_command,
+    owners_only,
+    guild_only,
+    hide_in_help,
+    category = "Management"
+)]
 pub async fn test_member_add(ctx: Context<'_>) -> Result<(), Error> {
     let member = match ctx.author_member().await {
         Some(member) => member,
@@ -179,7 +193,15 @@ pub async fn test_member_add(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-#[poise::command(slash_command, prefix_command, owners_only, guild_only)]
+/// Tests the welcome functions by simulating a member leaving the guild.
+#[poise::command(
+    slash_command,
+    prefix_command,
+    owners_only,
+    guild_only,
+    hide_in_help,
+    category = "Management"
+)]
 pub async fn test_member_remove(ctx: Context<'_>) -> Result<(), Error> {
     let guild_id = require_guild_id(ctx)?;
     guild_member_remove(ctx.serenity_context(), ctx.data(), &guild_id, ctx.author()).await?;

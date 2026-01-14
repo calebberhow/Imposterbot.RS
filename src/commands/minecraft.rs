@@ -52,8 +52,22 @@ async fn mcserver_autocomplete<'a>(
     futures::stream::iter(result).boxed()
 }
 
+/// Set of commands to check status and update registration of advertised minecraft servers.
+#[poise::command(
+    slash_command,
+    prefix_command,
+    track_edits,
+    track_deletion,
+    guild_only,
+    subcommands("status", "remove", "add", "update")
+)]
+pub async fn mc(_ctx: Context<'_>) -> Result<(), Error> {
+    Ok(())
+}
+
+/// Gets the status of a minecraft server advertised on this guild.
 #[poise::command(slash_command, prefix_command, track_edits, track_deletion, guild_only)]
-pub async fn mcstatus(
+async fn status(
     ctx: Context<'_>,
     #[description = "Server Name"]
     #[autocomplete = "mcserver_autocomplete"]
@@ -146,15 +160,15 @@ pub async fn mcstatus(
     }
 }
 
+/// Removes an advertised minecraft server.
 #[poise::command(
     slash_command,
     prefix_command,
-    rename = "rm-mcserver",
     required_permissions = "ADMINISTRATOR",
     default_member_permissions = "ADMINISTRATOR",
     guild_only
 )]
-pub async fn rm_mcserver(
+async fn remove(
     ctx: Context<'_>,
     #[autocomplete = "mcserver_autocomplete"]
     #[description = "Server Name"]
@@ -247,15 +261,15 @@ async fn get_mcserver(ctx: Context<'_>, name: &String) -> Result<Option<McServer
     }
 }
 
+/// Adds an advertised minecraft server.
 #[poise::command(
     slash_command,
     prefix_command,
-    rename = "add-mcserver",
     required_permissions = "ADMINISTRATOR",
     default_member_permissions = "ADMINISTRATOR",
     guild_only
 )]
-pub async fn add_mcserver(
+async fn add(
     ctx: Context<'_>,
     name: String,
     address: String,
@@ -316,15 +330,15 @@ pub async fn add_mcserver(
     Ok(())
 }
 
+/// Updates an advertised minecraft server.
 #[poise::command(
     slash_command,
     //prefix_command, // bug in proc-macro causes prefix commands with many Option<T> parameters to have exponential compilation times
-    rename = "update-mcserver",
     required_permissions = "ADMINISTRATOR",
     default_member_permissions = "ADMINISTRATOR",
     guild_only
 )]
-pub async fn update_mcserver(
+async fn update(
     ctx: Context<'_>,
     #[autocomplete = "mcserver_autocomplete"] name: String,
     address: Option<String>,

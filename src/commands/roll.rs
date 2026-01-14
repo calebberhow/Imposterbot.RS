@@ -72,11 +72,13 @@ fn make_description(side: u8) -> String {
 }
 
 // TODO: add modifier and quantity optional parameters
+/// Rolls a dice
 #[poise::command(
     slash_command,
     prefix_command,
     track_edits,
     track_deletion,
+    category = "Fun",
     aliases("dice")
 )]
 pub async fn roll(

@@ -19,7 +19,14 @@ fn do_flip(probability: Option<f64>) -> bool {
     value
 }
 
-#[poise::command(slash_command, prefix_command, track_edits, track_deletion)]
+/// Flips a coin
+#[poise::command(
+    slash_command,
+    prefix_command,
+    category = "Fun",
+    track_edits,
+    track_deletion
+)]
 pub async fn coinflip(
     ctx: Context<'_>,
     #[description = "Visible to you only? (default: false)"] ephemeral: Option<bool>,

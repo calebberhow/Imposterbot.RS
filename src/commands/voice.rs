@@ -17,6 +17,7 @@ use tracing::trace;
 use tracing::warn;
 use tracing::{debug, error};
 
+/// Set of commands to play/stop playing audio in voice channel
 #[poise::command(
     slash_command,
     subcommands("mariah", "stop", "youtube"),
