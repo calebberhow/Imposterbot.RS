@@ -8,5 +8,6 @@
             "name": "imposterbot_data",
             "group": "imposterbot"
         }
-    ]
+    ],
+    "githubRepositories.autoFetch.enabled": false
 }

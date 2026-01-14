@@ -8,4 +8,6 @@ use sea_orm::DatabaseConnection;
 pub struct Data {
     pub db_pool: DatabaseConnection,
     pub invoc_time: Arc<RwLock<HashMap<u64, std::time::Instant>>>,
+    #[cfg(feature = "voice")]
+    pub songbird: Arc<Songbird::Songbird>,
 }

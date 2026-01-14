@@ -251,6 +251,8 @@ fn create_discord_framework(
                 Ok(Data {
                     db_pool: pool,
                     invoc_time: Default::default(),
+                    #[cfg(feature = "voice")]
+                    songbird: Arc::new(Songbird::serenity(_ctx).await),
                 })
             })
         })

@@ -3,6 +3,10 @@ name = "imposterbot"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = []
+voice = ["songbird"]
+
 [dependencies]
 async-minecraft-ping = { git = "https://github.com/jsvana/async-minecraft-ping", branch = "master", features = [
     "srv",
@@ -19,3 +23,4 @@ tokio = { version = "1.49.0", features = ["full"] }
 tracing = "0.1.44"
 migration = { path = "./migration" }
 sea-orm = { version = "1.1.19", features = ["macros"] }
+songbird = {version = "0.5.0", optional = true }

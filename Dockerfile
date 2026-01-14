@@ -10,7 +10,7 @@ RUN rustup target add x86_64-unknown-linux-musl && \
 
 # Install OpenSSL development libraries and pkg-config
 RUN apt-get update && \
-    apt-get install -y pkg-config libssl-dev && \
+    apt-get install -y pkg-config libssl-dev libopus-dev build-essential autoconf automake libtool m4 && \
     rm -rf /var/lib/apt/lists/*
 
 ########################################################################################################################
@@ -31,7 +31,7 @@ ARG DATABASE_URL=sqlite:/imposterbot_data.db
 # Build and cache dependencies separately from app build
 COPY --from=planner /app/recipe.json recipe.json
 COPY migration migration
-RUN cargo chef cook --target x86_64-unknown-linux-musl --release --recipe-path recipe.json
+RUN cargo chef cook --target x86_64-unknown-linux-musl --release --recipe-path recipe.json --features "voice"
 
 # Copy source
 COPY . .
@@ -41,7 +41,7 @@ RUN groupadd --gid 10001 appgroup && \
     useradd --uid 10001 --gid appgroup --shell /bin/bash --create-home appuser
 
 # Build app
-RUN cargo build --target x86_64-unknown-linux-musl --release
+RUN cargo build --target x86_64-unknown-linux-musl --release --features "voice"
 
 ########################################################################################################################
 # Imposterbot image
@@ -50,7 +50,7 @@ RUN cargo build --target x86_64-unknown-linux-musl --release
 FROM ubuntu:24.04
 
 # Setup default environment variables
-ENV DATABASE_URL=sqlite:/data/imposterbot_data.db
+ENV DATABASE_URL=sqlite:/data/imposterbot_data.db?mode=rwc
 ENV DATA_DIRECTORY=/data
 ENV MEDIA_DIRECTORY=/media
 
