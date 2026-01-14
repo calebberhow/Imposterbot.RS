@@ -95,7 +95,7 @@ fn get_discord_token() -> String {
 }
 
 fn get_enabled_commands() -> Vec<poise::Command<Data, imposterbot::Error>> {
-    let mut default_commands = vec![
+    let default_commands = vec![
         imposterbot::commands::builtins::help(),
         imposterbot::commands::builtins::register(),
         imposterbot::commands::minecraft::mc(),
@@ -106,12 +106,9 @@ fn get_enabled_commands() -> Vec<poise::Command<Data, imposterbot::Error>> {
         imposterbot::commands::member_management::remove_default_member_role(),
         imposterbot::commands::member_management::test_member_add(),
         imposterbot::commands::member_management::test_member_remove(),
+        #[cfg(feature = "voice")]
+        imposterbot::commands::voice::play(),
     ];
-
-    #[cfg(feature = "voice")]
-    {
-        default_commands.push(imposterbot::commands::voice::play());
-    }
 
     // Get the list of commands disabled by environment variable
     let disable_commands_env = std::env::var("COMMAND_DISABLE_LIST").unwrap_or_default();
