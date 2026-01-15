@@ -1,7 +1,7 @@
 ![banner](./banner.png)
 # <img src="./logo.png" alt="logo" width=40 height=25>ImposterBot 
 
-ImposterBot is a feature-rich Discord bot written in **Rust**, focused on fun interactions, voice chat playback, and Minecraft server management. It is designed to be modular, extensible, and safe, leveraging Rust’s strong type system and async ecosystem.
+ImposterBot is a feature-rich Discord bot written in **Rust**, focused on fun interactions, voice chat playback, and Minecraft server management. It is designed to be modular, extensible, safe, and reliable.
 
 ---
 
@@ -20,7 +20,7 @@ Voice commands allow the bot to join voice channels and play audio:
 - **`play youtube <url | search>`** – Plays audio from a YouTube link or search term
 - **`play stop`** – Stops playback and leaves the voice channel
 
-> Voice support is optional and controlled via a Cargo feature flag.
+> Voice support is optional and controlled via cargo feature flags ("voice" or "youtube").
 
 ---
 
@@ -57,7 +57,8 @@ Automate and customize member onboarding:
 ### Prerequisites
 - Rust (1.92.0 recommended)
 - A Discord bot token
-- (Optional) [cmake](https://cmake.org/download/), c compiler and [yt-dlp](https://github.com/yt-dlp/yt-dlp) for voice feature
+- (Optional) [cmake](https://cmake.org/download/), c compiler for voice feature 
+- (Optional) [yt-dlp](https://github.com/yt-dlp/yt-dlp) for youtube feature
 
 ---
 
@@ -88,9 +89,13 @@ CMAKE_CONFIGURE_ARGS="-CMAKE_POLICY_VERSION_MINIMUM=3.5"
 
 Or with voice enabled (additional developer dependencies required):
 
-`cargo run --release --features voice`
+`cargo run --release --features="voice"`
 
-Or with docker (voice feature enabled automatically without requiring dev dependencies)
+Or with voice and youtube playback enabled (additional developer dependencies required):
+
+`cargo run --release --features="youtube"`
+
+Or with docker (youtube feature enabled automatically without requiring dev dependencies)
 
 `docker compose up -d --build`
 
@@ -102,7 +107,7 @@ Contributions are welcome!
 
 - Follow standard Rust formatting
 
-- Prefer feature-gated additions when introducing functionality with heavy dependencies (like opus/openssl/python/yt-tlp/etc for `voice` feature)
+- Prefer feature-gated additions when introducing functionality with heavy dependencies (like opus/openssl/python/yt-dlp/etc for `voice` feature)
 
 - Write clear commit messages
 

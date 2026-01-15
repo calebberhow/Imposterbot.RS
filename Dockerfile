@@ -30,7 +30,7 @@ ARG DATABASE_URL=sqlite:/imposterbot_data.db
 # Build and cache dependencies separately from app build
 COPY --from=planner /app/recipe.json recipe.json
 COPY migration migration
-RUN cargo chef cook --release --recipe-path recipe.json --features "voice"
+RUN cargo chef cook --release --recipe-path recipe.json --features "youtube"
 
 # Copy source
 COPY . .
@@ -40,7 +40,7 @@ RUN groupadd --gid 10001 appgroup && \
     useradd --uid 10001 --gid appgroup --shell /bin/bash --create-home appuser
 
 # Build app
-RUN cargo build --release --features "voice"
+RUN cargo build --release --features "youtube"
 
 ########################################################################################################################
 # Imposterbot image

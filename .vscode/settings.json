@@ -11,6 +11,6 @@
     ],
     "githubRepositories.autoFetch.enabled": false,
     "rust-analyzer.cargo.features": [
-        "voice"
+        "youtube"
     ]
 }

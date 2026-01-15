@@ -6,23 +6,34 @@ use crate::{
     infrastructure::{environment::get_media_directory, ids::require_guild_id},
 };
 use poise::CreateReply;
-use poise::serenity_prelude::futures::{Stream, StreamExt};
+use poise::serenity_prelude::ChannelId;
+use poise::serenity_prelude::GuildId;
+use poise::serenity_prelude::async_trait;
 use poise::serenity_prelude::prelude::TypeMapKey;
-use poise::serenity_prelude::{ChannelId, CreateEmbed};
-use poise::serenity_prelude::{CreateEmbedAuthor, GuildId};
-use poise::serenity_prelude::{async_trait, futures};
 use songbird::error::JoinError;
 use songbird::events::{Event, EventContext, EventHandler as VoiceEventHandler, TrackEvent};
-use songbird::input::{AuxMetadata, Compose, YoutubeDl};
 use songbird::tracks::TrackHandle;
+use tracing::error;
 use tracing::trace;
 use tracing::warn;
-use tracing::{debug, error};
 
 /// Set of commands to play/stop playing audio in voice channel
+#[cfg(feature = "youtube")]
 #[poise::command(
     slash_command,
     subcommands("mariah", "stop", "youtube"),
+    required_permissions = "USE_SOUNDBOARD",
+    default_member_permissions = "USE_SOUNDBOARD"
+)]
+pub async fn play(_ctx: Context<'_>) -> Result<(), Error> {
+    Ok(())
+}
+
+/// Set of commands to play/stop playing audio in voice channel
+#[cfg(not(feature = "youtube"))]
+#[poise::command(
+    slash_command,
+    subcommands("mariah", "stop"),
     required_permissions = "USE_SOUNDBOARD",
     default_member_permissions = "USE_SOUNDBOARD"
 )]
@@ -104,12 +115,16 @@ pub async fn mariah(ctx: Context<'_>, channel: Option<ChannelId>) -> Result<(), 
     Ok(())
 }
 
+#[cfg(feature = "youtube")]
 async fn youtube_search_autocomplete<'a>(
     ctx: Context<'a>,
     partial: &'a str,
-) -> impl Stream<Item = String> + 'a {
+) -> impl poise::serenity_prelude::futures::Stream<Item = String> + 'a {
+    use poise::serenity_prelude::futures::{StreamExt, stream};
+    use songbird::input::YoutubeDl;
+
     // Get guild id
-    debug!(
+    tracing::debug!(
         partial = partial,
         "youtube_search_autocomplete executed with args"
     );
@@ -130,13 +145,14 @@ async fn youtube_search_autocomplete<'a>(
     let results = query.search(Some(5)).await;
 
     match results {
-        Ok(results) => futures::stream::iter(results.filter_map(|x| x.title.or(x.track)))
+        Ok(results) => stream::iter(results.filter_map(|x| x.title.or(x.track)))
             .inspect(|x| trace!("Produced autocomplete value: {}", x))
             .boxed(),
-        Err(_) => futures::stream::empty().boxed(),
+        Err(_) => stream::empty().boxed(),
     }
 }
 
+#[cfg(feature = "youtube")]
 #[poise::command(slash_command, guild_only)]
 pub async fn youtube(
     ctx: Context<'_>,
@@ -244,10 +260,14 @@ pub async fn stop(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
+#[cfg(feature = "youtube")]
 async fn play_from_youtube(
     ctx: Context<'_>,
     url: String,
-) -> Result<(Option<AuxMetadata>, TrackHandle), Error> {
+) -> Result<(Option<songbird::input::AuxMetadata>, TrackHandle), Error> {
+    use songbird::input::Compose;
+    use songbird::input::YoutubeDl;
+
     let guild_id = require_guild_id(ctx)?;
     let do_search = !url.starts_with("http");
 
@@ -287,7 +307,10 @@ async fn play_from_youtube(
     }
 }
 
-fn get_track_embed(metadata: AuxMetadata) -> CreateEmbed {
+#[cfg(feature = "youtube")]
+fn get_track_embed(metadata: songbird::input::AuxMetadata) -> poise::serenity_prelude::CreateEmbed {
+    use poise::serenity_prelude::{CreateEmbed, CreateEmbedAuthor};
+
     let mut embd =
         CreateEmbed::default().title(metadata.track.or(metadata.title).unwrap_or_default());
     if let Some(x) = metadata.thumbnail {
