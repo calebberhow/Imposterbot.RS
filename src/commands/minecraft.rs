@@ -8,9 +8,8 @@ use tracing::{debug, info, trace};
 
 use crate::entities::mc_server;
 use crate::infrastructure::colors;
-use crate::infrastructure::util::{
-    DebuggableReply, defer_or_broadcast, id_to_string, require_guild_id,
-};
+use crate::infrastructure::ids::{id_to_string, require_guild_id};
+use crate::infrastructure::util::{DebuggableReply, defer_or_broadcast};
 use crate::{Context, Error};
 
 async fn ping_mc_server(

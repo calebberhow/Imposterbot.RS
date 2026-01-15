@@ -1,8 +1,10 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::infrastructure::util::get_media_directory;
-use crate::{Context, Error, infrastructure::util::require_guild_id};
+use crate::{
+    Context, Error,
+    infrastructure::{environment::get_media_directory, ids::require_guild_id},
+};
 use poise::CreateReply;
 use poise::serenity_prelude::futures::{Stream, StreamExt};
 use poise::serenity_prelude::prelude::TypeMapKey;

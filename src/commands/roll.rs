@@ -7,7 +7,10 @@ use tracing::trace;
 
 use crate::{
     Context, Error,
-    infrastructure::util::{DebuggableReply, defer_or_broadcast, get_media_directory},
+    infrastructure::{
+        environment::get_media_directory,
+        util::{DebuggableReply, defer_or_broadcast},
+    },
 };
 
 #[derive(Debug, poise::ChoiceParameter, Clone, Copy)]

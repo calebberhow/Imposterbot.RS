@@ -1,35 +1,20 @@
-use std::{
-    fmt::Debug,
-    num::ParseIntError,
-    path::{Path, PathBuf},
-};
+use std::fmt::Debug;
 
 use poise::{
     CreateReply,
-    serenity_prelude::{ChannelId, CreateMessage, GuildId, Typing},
+    serenity_prelude::{ChannelId, CreateMessage, Typing},
 };
 use tracing::trace;
 
-use crate::{Context, Error, infrastructure::environment};
+use crate::{Context as ImposterbotContext, Error};
 
+/// Creates a lazily initialized static regex variable with a constant regex expression.
 #[macro_export]
 macro_rules! lazy_regex {
     ($name:ident, $value:expr) => {
         static $name: once_cell::sync::Lazy<regex::Regex> =
             once_cell::sync::Lazy::new(|| regex::Regex::new($value).expect("Regex contains body"));
     };
-}
-
-pub fn get_data_directory() -> PathBuf {
-    let st: String =
-        std::env::var(environment::DATA_DIRECTORY).unwrap_or_else(|_| "./data".to_string());
-    Path::new(st.as_str()).to_owned()
-}
-
-pub fn get_media_directory() -> PathBuf {
-    let st: String =
-        std::env::var(environment::MEDIA_DIRECTORY).unwrap_or_else(|_| "./media".to_string());
-    Path::new(st.as_str()).to_owned()
 }
 
 pub struct DebuggableReply(CreateReply);
@@ -71,29 +56,7 @@ impl Debug for DebuggableReply {
     }
 }
 
-pub fn require_guild_id(ctx: Context<'_>) -> Result<GuildId, Error> {
-    let guild_id = ctx
-        .guild_id()
-        .ok_or("This function is only available in guilds")?;
-    trace!("Found guild_id={:?}", guild_id);
-    Ok(guild_id)
-}
-
-pub fn id_to_string<T>(value: T) -> String
-where
-    T: Into<u64>,
-{
-    let int: u64 = value.into();
-    int.to_string()
-}
-
-pub fn id_from_string<T>(value: &str) -> Result<T, ParseIntError>
-where
-    T: From<u64>,
-{
-    value.parse::<u64>().map(|int| T::from(int))
-}
-
+/// Converts a `CreateReply` into a `CreateMessage` and sends it with the `ChannelId`.
 pub async fn send_message_from_reply(
     channel: &ChannelId,
     ctx: &poise::serenity_prelude::Context,
@@ -125,7 +88,7 @@ pub async fn send_message_from_reply(
 /// Note:
 /// When the returned result goes out of scope, is dropped, or Typing.stop() is called, the typing hint will disappear.
 pub async fn defer_or_broadcast(
-    ctx: Context<'_>,
+    ctx: ImposterbotContext<'_>,
     ephemeral: bool,
 ) -> Result<Option<Typing>, Error> {
     match ctx {

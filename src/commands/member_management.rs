@@ -1,4 +1,3 @@
-use entities::welcome_channel;
 use migration::OnConflict;
 use poise::{
     CreateReply,
@@ -12,9 +11,9 @@ use tracing::{debug, trace};
 
 use crate::{
     Context, Error,
-    entities::{self, welcome_roles},
+    entities::{welcome_channel, welcome_roles},
     events::guild_member::{get_member_roles_on_join, guild_member_add, guild_member_remove},
-    infrastructure::util::{id_to_string, require_guild_id},
+    infrastructure::ids::{id_to_string, require_guild_id},
 };
 
 async fn default_role_autocomplete<'a>(
