@@ -143,7 +143,7 @@ pub async fn youtube(
     #[autocomplete = "youtube_search_autocomplete"] video: String,
     channel: Option<ChannelId>,
 ) -> Result<(), Error> {
-    ctx.defer_ephemeral().await?;
+    ctx.defer().await?;
     let guild_id = require_guild_id(ctx)?;
     let channel_id = match channel {
         Some(x) => Ok(x),

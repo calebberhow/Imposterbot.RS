@@ -60,6 +60,7 @@ COPY --from=builder --chown=appuser:appgroup ./target/release/imposterbot /app/i
 COPY ./media /media
 
 COPY ./deps/yt-dlp /usr/local/bin/yt-dlp
+RUN chmod u+rx /usr/local/bin/yt-dlp
 
 ## App is dynamically linked to libopus
 # yt-dlp requires python3 executable during runtime.
