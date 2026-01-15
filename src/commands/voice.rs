@@ -65,7 +65,6 @@ pub async fn mariah(ctx: Context<'_>, channel: Option<ChannelId>) -> Result<(), 
                 ctx.send(
                     CreateReply::default()
                         .content("Playing mariah carey!")
-                        .ephemeral(true)
                         .reply(true),
                 )
                 .await?;
@@ -178,7 +177,7 @@ pub async fn youtube(
                     Some(meta) => CreateReply::default().embed(get_track_embed(meta)),
                     None => CreateReply::default().content("Playing from youtube"),
                 };
-                ctx.send(reply.ephemeral(true).reply(true)).await?;
+                ctx.send(reply.reply(true)).await?;
             }
             Err(play_err) => {
                 warn!(
@@ -239,13 +238,8 @@ pub async fn stop(ctx: Context<'_>) -> Result<(), Error> {
         },
     }?;
 
-    ctx.send(
-        CreateReply::default()
-            .content("Stopping!")
-            .ephemeral(true)
-            .reply(true),
-    )
-    .await?;
+    ctx.send(CreateReply::default().content("Stopping!").reply(true))
+        .await?;
 
     Ok(())
 }
