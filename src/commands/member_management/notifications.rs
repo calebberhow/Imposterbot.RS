@@ -10,6 +10,7 @@ use crate::{
     },
     events::guild_member::{guild_member_add, guild_member_remove},
     infrastructure::{colors, ids::require_guild_id},
+    poise_instrument, record_ctx_fields,
 };
 
 static HELP_DESCRIPTION: &'static str = r#"
@@ -73,7 +74,6 @@ static HELP_LIST: &'static str = r#"
 - `/notify-member leave author-icon`
 - `/notify-member leave footer-icon`
 "#;
-
 #[poise::command(
     slash_command,
     required_permissions = "ADMINISTRATOR",
@@ -87,14 +87,16 @@ pub async fn cfg_member_notification(_ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-#[poise::command(
-    slash_command,
-    required_permissions = "ADMINISTRATOR",
-    default_member_permissions = "ADMINISTRATOR",
-    guild_only,
-    category = "Management"
-)]
-async fn help(ctx: Context<'_>) -> Result<(), Error> {
+poise_instrument! {
+    /// Shows documentation about /notify-member commands
+    #[poise::command(
+        slash_command,
+        required_permissions = "ADMINISTRATOR",
+        default_member_permissions = "ADMINISTRATOR",
+        guild_only,
+        category = "Management"
+    )]
+    async fn help(ctx: Context<'_>) -> Result<(), Error> {
     ctx.send(
         CreateReply::default()
             .embed(
@@ -112,7 +114,7 @@ async fn help(ctx: Context<'_>) -> Result<(), Error> {
     .await?;
     Ok(())
 }
-
+}
 /// Subcommands of cfg_member_notification for join events
 ///
 /// Contains poise declarations, but implementations are defined in the MemberEventConfigurer trait
@@ -145,164 +147,174 @@ impl CfgMemberJoin {
         Ok(())
     }
 
-    /// Provides all configuration options for when members join this guild.
-    #[poise::command(
-        slash_command,
-        required_permissions = "ADMINISTRATOR",
-        default_member_permissions = "ADMINISTRATOR",
-        guild_only,
-        rename = "full",
-        category = "Management"
-    )]
-    pub async fn full(
-        ctx: Context<'_>,
-        #[description = "Plain-text content of the notification message"] content: Option<String>,
-        #[description = "Embed description text"] description: Option<String>,
-        #[description = "Embed thumbnail file upload"] thumbnail_file: Option<serenity::Attachment>,
-        #[description = "Embed thumbnail web url"] thumbnail_url: Option<String>,
-        #[description = "Embed author text"] author: Option<String>,
-        #[description = "Embed author icon file upload"] author_icon_file: Option<
-            serenity::Attachment,
-        >,
-        #[description = "Embed author icon web url"] author_icon_url: Option<String>,
-        #[description = "Embed footer text"] footer: Option<String>,
-        #[description = "Embed footer icon file upload"] footer_icon_file: Option<
-            serenity::Attachment,
-        >,
-        #[description = "Embed footer icon web url"] footer_icon_url: Option<String>,
-    ) -> Result<(), Error> {
-        CfgMemberJoin::full_impl(
-            ctx,
-            content,
-            description,
-            thumbnail_file,
-            thumbnail_url,
-            author,
-            author_icon_file,
-            author_icon_url,
-            footer,
-            footer_icon_file,
-            footer_icon_url,
-        )
-        .await
-    }
+    poise_instrument! {
+        /// Provides all configuration options for when members join this guild.
+        #[poise::command(
+            slash_command,
+            required_permissions = "ADMINISTRATOR",
+            default_member_permissions = "ADMINISTRATOR",
+            guild_only,
+            rename = "full",
+            category = "Management"
+        )]
+        pub async fn full(
+            ctx: Context<'_>,
+            #[description = "Plain-text content of the notification message"] content: Option<String>,
+            #[description = "Embed description text"] description: Option<String>,
+            #[description = "Embed thumbnail file upload"] thumbnail_file: Option<serenity::Attachment>,
+            #[description = "Embed thumbnail web url"] thumbnail_url: Option<String>,
+            #[description = "Embed author text"] author: Option<String>,
+            #[description = "Embed author icon file upload"] author_icon_file: Option<
+                serenity::Attachment,
+            >,
+            #[description = "Embed author icon web url"] author_icon_url: Option<String>,
+            #[description = "Embed footer text"] footer: Option<String>,
+            #[description = "Embed footer icon file upload"] footer_icon_file: Option<
+                serenity::Attachment,
+            >,
+            #[description = "Embed footer icon web url"] footer_icon_url: Option<String>,
+        ) -> Result<(), Error> {
+            record_ctx_fields!(ctx);
+            CfgMemberJoin::full_impl(
+                ctx,
+                content,
+                description,
+                thumbnail_file,
+                thumbnail_url,
+                author,
+                author_icon_file,
+                author_icon_url,
+                footer,
+                footer_icon_file,
+                footer_icon_url,
+            )
+            .await
+        }
 
-    // Configures the join notification content
-    #[poise::command(
-        slash_command,
-        required_permissions = "ADMINISTRATOR",
-        default_member_permissions = "ADMINISTRATOR",
-        guild_only,
-        category = "Management"
-    )]
-    pub async fn content(
-        ctx: Context<'_>,
-        #[description = "Plain-text content of the notification message"] content: Option<String>, // param matches func name
-    ) -> Result<(), Error> {
-        CfgMemberJoin::content_impl(ctx, content).await
-    }
+        // Configures the join notification content
+        #[poise::command(
+            slash_command,
+            required_permissions = "ADMINISTRATOR",
+            default_member_permissions = "ADMINISTRATOR",
+            guild_only,
+            category = "Management"
+        )]
+        pub async fn content(
+            ctx: Context<'_>,
+            #[description = "Plain-text content of the notification message"] content: Option<String>, // param matches func name
+        ) -> Result<(), Error> {
+            record_ctx_fields!(ctx);
+            CfgMemberJoin::content_impl(ctx, content).await
+        }
 
-    /// Configures the join notification embed description
-    #[poise::command(
-        slash_command,
-        required_permissions = "ADMINISTRATOR",
-        default_member_permissions = "ADMINISTRATOR",
-        guild_only,
-        rename = "description",
-        category = "Management"
-    )]
-    pub async fn description(
-        ctx: Context<'_>,
-        #[description = "Embed description text"] description: Option<String>,
-    ) -> Result<(), Error> {
-        CfgMemberJoin::description_impl(ctx, description).await
-    }
+        /// Configures the join notification embed description
+        #[poise::command(
+            slash_command,
+            required_permissions = "ADMINISTRATOR",
+            default_member_permissions = "ADMINISTRATOR",
+            guild_only,
+            rename = "description",
+            category = "Management"
+        )]
+        pub async fn description(
+            ctx: Context<'_>,
+            #[description = "Embed description text"] description: Option<String>,
+        ) -> Result<(), Error> {
+            record_ctx_fields!(ctx);
+            CfgMemberJoin::description_impl(ctx, description).await
+        }
 
-    /// Configures the join notification embed thumbnail
-    #[poise::command(
-        slash_command,
-        required_permissions = "ADMINISTRATOR",
-        default_member_permissions = "ADMINISTRATOR",
-        guild_only,
-        rename = "thumbnail",
-        category = "Management"
-    )]
-    pub async fn thumbnail(
-        ctx: Context<'_>,
-        #[description = "Embed thumbnail file upload"] thumbnail_file: Option<serenity::Attachment>,
-        #[description = "Embed thumbnail web url"] thumbnail_url: Option<String>,
-    ) -> Result<(), Error> {
-        CfgMemberJoin::thumbnail_impl(ctx, thumbnail_file, thumbnail_url).await
-    }
+        /// Configures the join notification embed thumbnail
+        #[poise::command(
+            slash_command,
+            required_permissions = "ADMINISTRATOR",
+            default_member_permissions = "ADMINISTRATOR",
+            guild_only,
+            rename = "thumbnail",
+            category = "Management"
+        )]
+        pub async fn thumbnail(
+            ctx: Context<'_>,
+            #[description = "Embed thumbnail file upload"] thumbnail_file: Option<serenity::Attachment>,
+            #[description = "Embed thumbnail web url"] thumbnail_url: Option<String>,
+        ) -> Result<(), Error> {
+            record_ctx_fields!(ctx);
+            CfgMemberJoin::thumbnail_impl(ctx, thumbnail_file, thumbnail_url).await
+        }
 
-    /// Configures the join notification embed author
-    #[poise::command(
-        slash_command,
-        required_permissions = "ADMINISTRATOR",
-        default_member_permissions = "ADMINISTRATOR",
-        guild_only,
-        rename = "author",
-        category = "Management"
-    )]
-    pub async fn author(
-        ctx: Context<'_>,
-        #[description = "Embed author text"] author: Option<String>,
-    ) -> Result<(), Error> {
-        CfgMemberJoin::author_impl(ctx, author).await
-    }
+        /// Configures the join notification embed author
+        #[poise::command(
+            slash_command,
+            required_permissions = "ADMINISTRATOR",
+            default_member_permissions = "ADMINISTRATOR",
+            guild_only,
+            rename = "author",
+            category = "Management"
+        )]
+        pub async fn author(
+            ctx: Context<'_>,
+            #[description = "Embed author text"] author: Option<String>,
+        ) -> Result<(), Error> {
+            record_ctx_fields!(ctx);
+            CfgMemberJoin::author_impl(ctx, author).await
+        }
 
-    /// Configures the join notification embed author icon
-    #[poise::command(
-        slash_command,
-        required_permissions = "ADMINISTRATOR",
-        default_member_permissions = "ADMINISTRATOR",
-        guild_only,
-        rename = "author-icon",
-        category = "Management"
-    )]
-    pub async fn author_icon(
-        ctx: Context<'_>,
-        #[description = "Embed author icon file upload"] author_icon_file: Option<
-            serenity::Attachment,
-        >,
-        #[description = "Embed author icon web url"] author_icon_url: Option<String>,
-    ) -> Result<(), Error> {
-        CfgMemberJoin::author_icon_impl(ctx, author_icon_file, author_icon_url).await
-    }
+        /// Configures the join notification embed author icon
+        #[poise::command(
+            slash_command,
+            required_permissions = "ADMINISTRATOR",
+            default_member_permissions = "ADMINISTRATOR",
+            guild_only,
+            rename = "author-icon",
+            category = "Management"
+        )]
+        pub async fn author_icon(
+            ctx: Context<'_>,
+            #[description = "Embed author icon file upload"] author_icon_file: Option<
+                serenity::Attachment,
+            >,
+            #[description = "Embed author icon web url"] author_icon_url: Option<String>,
+        ) -> Result<(), Error> {
+            record_ctx_fields!(ctx);
+            CfgMemberJoin::author_icon_impl(ctx, author_icon_file, author_icon_url).await
+        }
 
-    /// Configures the join notification embed footer
-    #[poise::command(
-        slash_command,
-        required_permissions = "ADMINISTRATOR",
-        default_member_permissions = "ADMINISTRATOR",
-        guild_only,
-        rename = "footer",
-        category = "Management"
-    )]
-    pub async fn footer(
-        ctx: Context<'_>,
-        #[description = "Embed footer text"] footer: Option<String>,
-    ) -> Result<(), Error> {
-        CfgMemberJoin::footer_impl(ctx, footer).await
-    }
+        /// Configures the join notification embed footer
+        #[poise::command(
+            slash_command,
+            required_permissions = "ADMINISTRATOR",
+            default_member_permissions = "ADMINISTRATOR",
+            guild_only,
+            rename = "footer",
+            category = "Management"
+        )]
+        pub async fn footer(
+            ctx: Context<'_>,
+            #[description = "Embed footer text"] footer: Option<String>,
+        ) -> Result<(), Error> {
+            record_ctx_fields!(ctx);
+            CfgMemberJoin::footer_impl(ctx, footer).await
+        }
 
-    /// Configures the join notification embed footer icon
-    #[poise::command(
-        slash_command,
-        required_permissions = "ADMINISTRATOR",
-        default_member_permissions = "ADMINISTRATOR",
-        guild_only,
-        rename = "footer-icon",
-        category = "Management"
-    )]
-    pub async fn footer_icon(
-        ctx: Context<'_>,
-        #[description = "Embed footer icon file upload"] footer_icon_file: Option<
-            serenity::Attachment,
-        >,
-        #[description = "Embed footer icon web url"] footer_icon_url: Option<String>,
-    ) -> Result<(), Error> {
-        CfgMemberJoin::footer_icon_impl(ctx, footer_icon_file, footer_icon_url).await
+        /// Configures the join notification embed footer icon
+        #[poise::command(
+            slash_command,
+            required_permissions = "ADMINISTRATOR",
+            default_member_permissions = "ADMINISTRATOR",
+            guild_only,
+            rename = "footer-icon",
+            category = "Management"
+        )]
+        pub async fn footer_icon(
+            ctx: Context<'_>,
+            #[description = "Embed footer icon file upload"] footer_icon_file: Option<
+                serenity::Attachment,
+            >,
+            #[description = "Embed footer icon web url"] footer_icon_url: Option<String>,
+        ) -> Result<(), Error> {
+            record_ctx_fields!(ctx);
+            CfgMemberJoin::footer_icon_impl(ctx, footer_icon_file, footer_icon_url).await
+        }
     }
 }
 
@@ -338,211 +350,225 @@ impl CfgMemberLeave {
         Ok(())
     }
 
-    /// Provides all configuration options for when members leave this guild.
+    poise_instrument! {
+        /// Provides all configuration options for when members leave this guild.
+        #[poise::command(
+            slash_command,
+            required_permissions = "ADMINISTRATOR",
+            default_member_permissions = "ADMINISTRATOR",
+            guild_only,
+            rename = "full",
+            category = "Management"
+        )]
+        pub async fn full(
+            ctx: Context<'_>,
+            #[description = "Plain-text content of the notification message"] content: Option<String>,
+            #[description = "Embed description text"] description: Option<String>,
+            #[description = "Embed thumbnail file upload"] thumbnail_file: Option<serenity::Attachment>,
+            #[description = "Embed thumbnail web url"] thumbnail_url: Option<String>,
+            #[description = "Embed author text"] author: Option<String>,
+            #[description = "Embed author icon file upload"] author_icon_file: Option<
+                serenity::Attachment,
+            >,
+            #[description = "Embed author icon web url"] author_icon_url: Option<String>,
+            #[description = "Embed footer text"] footer: Option<String>,
+            #[description = "Embed footer icon file upload"] footer_icon_file: Option<
+                serenity::Attachment,
+            >,
+            #[description = "Embed footer icon web url"] footer_icon_url: Option<String>,
+        ) -> Result<(), Error> {
+            record_ctx_fields!(ctx);
+            CfgMemberLeave::full_impl(
+                ctx,
+                content,
+                description,
+                thumbnail_file,
+                thumbnail_url,
+                author,
+                author_icon_file,
+                author_icon_url,
+                footer,
+                footer_icon_file,
+                footer_icon_url,
+            )
+            .await
+        }
+
+        /// Configures the leave notification content
+        #[poise::command(
+            slash_command,
+            required_permissions = "ADMINISTRATOR",
+            default_member_permissions = "ADMINISTRATOR",
+            guild_only,
+            rename = "content",
+            category = "Management"
+        )]
+        pub async fn content(
+            ctx: Context<'_>,
+            #[description = "Plain-text content of the notification message"] content: Option<String>,
+        ) -> Result<(), Error> {
+            record_ctx_fields!(ctx);
+            CfgMemberLeave::content_impl(ctx, content).await
+        }
+
+        /// Configures the leave notification embed description
+        #[poise::command(
+            slash_command,
+            required_permissions = "ADMINISTRATOR",
+            default_member_permissions = "ADMINISTRATOR",
+            guild_only,
+            rename = "description",
+            category = "Management"
+        )]
+        pub async fn description(
+            ctx: Context<'_>,
+            #[description = "Embed description text"] description: Option<String>,
+        ) -> Result<(), Error> {
+            record_ctx_fields!(ctx);
+            CfgMemberLeave::description_impl(ctx, description).await
+        }
+
+        /// Configures the leave notification embed thumbnail
+        #[poise::command(
+            slash_command,
+            required_permissions = "ADMINISTRATOR",
+            default_member_permissions = "ADMINISTRATOR",
+            guild_only,
+            rename = "thumbnail",
+            category = "Management"
+        )]
+        pub async fn thumbnail(
+            ctx: Context<'_>,
+            #[description = "Embed thumbnail file upload"] thumbnail_file: Option<serenity::Attachment>,
+            #[description = "Embed thumbnail web url"] thumbnail_url: Option<String>,
+        ) -> Result<(), Error> {
+            record_ctx_fields!(ctx);
+            CfgMemberLeave::thumbnail_impl(ctx, thumbnail_file, thumbnail_url).await
+        }
+
+        /// Configures the leave notification embed author
+        #[poise::command(
+            slash_command,
+            required_permissions = "ADMINISTRATOR",
+            default_member_permissions = "ADMINISTRATOR",
+            guild_only,
+            rename = "author",
+            category = "Management"
+        )]
+        pub async fn author(
+            ctx: Context<'_>,
+            #[description = "Embed author text"] author: Option<String>,
+        ) -> Result<(), Error> {
+            record_ctx_fields!(ctx);
+            CfgMemberLeave::author_impl(ctx, author).await
+        }
+
+        /// Configures the leave notification embed author icon
+        #[poise::command(
+            slash_command,
+            required_permissions = "ADMINISTRATOR",
+            default_member_permissions = "ADMINISTRATOR",
+            guild_only,
+            rename = "author-icon",
+            category = "Management"
+        )]
+        pub async fn author_icon(
+            ctx: Context<'_>,
+            #[description = "Embed author icon file upload"] author_icon_file: Option<
+                serenity::Attachment,
+            >,
+            #[description = "Embed author icon web url"] author_icon_url: Option<String>,
+        ) -> Result<(), Error> {
+            record_ctx_fields!(ctx);
+            CfgMemberLeave::author_icon_impl(ctx, author_icon_file, author_icon_url).await
+        }
+
+        /// Configures the leave notification embed footer
+        #[poise::command(
+            slash_command,
+            required_permissions = "ADMINISTRATOR",
+            default_member_permissions = "ADMINISTRATOR",
+            guild_only,
+            rename = "footer",
+            category = "Management"
+        )]
+        pub async fn footer(
+            ctx: Context<'_>,
+            #[description = "Embed footer text"] footer: Option<String>,
+        ) -> Result<(), Error> {
+            record_ctx_fields!(ctx);
+            CfgMemberLeave::footer_impl(ctx, footer).await
+        }
+
+        /// Configures the leave notification embed footer icon
+        #[poise::command(
+            slash_command,
+            required_permissions = "ADMINISTRATOR",
+            default_member_permissions = "ADMINISTRATOR",
+            guild_only,
+            rename = "footer-icon",
+            category = "Management"
+        )]
+        pub async fn footer_icon(
+            ctx: Context<'_>,
+            #[description = "Embed footer icon file upload"] footer_icon_file: Option<
+                serenity::Attachment,
+            >,
+            #[description = "Embed footer icon web url"] footer_icon_url: Option<String>,
+        ) -> Result<(), Error> {
+            record_ctx_fields!(ctx);
+            CfgMemberLeave::footer_icon_impl(ctx, footer_icon_file, footer_icon_url).await
+        }
+    }
+}
+
+poise_instrument! {
+    /// Tests the welcome functions by simulating a member joining the guild.
     #[poise::command(
         slash_command,
-        required_permissions = "ADMINISTRATOR",
-        default_member_permissions = "ADMINISTRATOR",
+        prefix_command,
+        owners_only,
         guild_only,
-        rename = "full",
+        hide_in_help,
         category = "Management"
     )]
-    pub async fn full(
-        ctx: Context<'_>,
-        #[description = "Plain-text content of the notification message"] content: Option<String>,
-        #[description = "Embed description text"] description: Option<String>,
-        #[description = "Embed thumbnail file upload"] thumbnail_file: Option<serenity::Attachment>,
-        #[description = "Embed thumbnail web url"] thumbnail_url: Option<String>,
-        #[description = "Embed author text"] author: Option<String>,
-        #[description = "Embed author icon file upload"] author_icon_file: Option<
-            serenity::Attachment,
-        >,
-        #[description = "Embed author icon web url"] author_icon_url: Option<String>,
-        #[description = "Embed footer text"] footer: Option<String>,
-        #[description = "Embed footer icon file upload"] footer_icon_file: Option<
-            serenity::Attachment,
-        >,
-        #[description = "Embed footer icon web url"] footer_icon_url: Option<String>,
-    ) -> Result<(), Error> {
-        CfgMemberLeave::full_impl(
-            ctx,
-            content,
-            description,
-            thumbnail_file,
-            thumbnail_url,
-            author,
-            author_icon_file,
-            author_icon_url,
-            footer,
-            footer_icon_file,
-            footer_icon_url,
+    pub async fn test_member_add(ctx: Context<'_>) -> Result<(), Error> {
+            record_ctx_fields!(ctx);
+        ctx.defer_ephemeral().await?;
+        let member = match ctx.author_member().await {
+            Some(member) => member,
+            None => return Err("Must be in guild".into()),
+        };
+        guild_member_add(ctx.serenity_context(), ctx.data(), &member).await?;
+        ctx.send(
+            CreateReply::default()
+                .content("Acknowledged!")
+                .ephemeral(true),
         )
-        .await
+        .await?;
+        Ok(())
     }
 
-    /// Configures the leave notification content
+    /// Tests the welcome functions by simulating a member leaving the guild.
     #[poise::command(
         slash_command,
-        required_permissions = "ADMINISTRATOR",
-        default_member_permissions = "ADMINISTRATOR",
+        prefix_command,
+        owners_only,
         guild_only,
-        rename = "content",
+        hide_in_help,
         category = "Management"
     )]
-    pub async fn content(
-        ctx: Context<'_>,
-        #[description = "Plain-text content of the notification message"] content: Option<String>,
-    ) -> Result<(), Error> {
-        CfgMemberLeave::content_impl(ctx, content).await
+    pub async fn test_member_remove(ctx: Context<'_>) -> Result<(), Error> {
+            record_ctx_fields!(ctx);
+        ctx.defer_ephemeral().await?;
+        let guild_id = require_guild_id(ctx)?;
+        guild_member_remove(ctx.serenity_context(), ctx.data(), &guild_id, ctx.author()).await?;
+        ctx.send(
+            CreateReply::default()
+                .content("Acknowledged!")
+                .ephemeral(true),
+        )
+        .await?;
+        Ok(())
     }
-
-    /// Configures the leave notification embed description
-    #[poise::command(
-        slash_command,
-        required_permissions = "ADMINISTRATOR",
-        default_member_permissions = "ADMINISTRATOR",
-        guild_only,
-        rename = "description",
-        category = "Management"
-    )]
-    pub async fn description(
-        ctx: Context<'_>,
-        #[description = "Embed description text"] description: Option<String>,
-    ) -> Result<(), Error> {
-        CfgMemberLeave::description_impl(ctx, description).await
-    }
-
-    /// Configures the leave notification embed thumbnail
-    #[poise::command(
-        slash_command,
-        required_permissions = "ADMINISTRATOR",
-        default_member_permissions = "ADMINISTRATOR",
-        guild_only,
-        rename = "thumbnail",
-        category = "Management"
-    )]
-    pub async fn thumbnail(
-        ctx: Context<'_>,
-        #[description = "Embed thumbnail file upload"] thumbnail_file: Option<serenity::Attachment>,
-        #[description = "Embed thumbnail web url"] thumbnail_url: Option<String>,
-    ) -> Result<(), Error> {
-        CfgMemberLeave::thumbnail_impl(ctx, thumbnail_file, thumbnail_url).await
-    }
-
-    /// Configures the leave notification embed author
-    #[poise::command(
-        slash_command,
-        required_permissions = "ADMINISTRATOR",
-        default_member_permissions = "ADMINISTRATOR",
-        guild_only,
-        rename = "author",
-        category = "Management"
-    )]
-    pub async fn author(
-        ctx: Context<'_>,
-        #[description = "Embed author text"] author: Option<String>,
-    ) -> Result<(), Error> {
-        CfgMemberLeave::author_impl(ctx, author).await
-    }
-
-    /// Configures the leave notification embed author icon
-    #[poise::command(
-        slash_command,
-        required_permissions = "ADMINISTRATOR",
-        default_member_permissions = "ADMINISTRATOR",
-        guild_only,
-        rename = "author-icon",
-        category = "Management"
-    )]
-    pub async fn author_icon(
-        ctx: Context<'_>,
-        #[description = "Embed author icon file upload"] author_icon_file: Option<
-            serenity::Attachment,
-        >,
-        #[description = "Embed author icon web url"] author_icon_url: Option<String>,
-    ) -> Result<(), Error> {
-        CfgMemberLeave::author_icon_impl(ctx, author_icon_file, author_icon_url).await
-    }
-
-    /// Configures the leave notification embed footer
-    #[poise::command(
-        slash_command,
-        required_permissions = "ADMINISTRATOR",
-        default_member_permissions = "ADMINISTRATOR",
-        guild_only,
-        rename = "footer",
-        category = "Management"
-    )]
-    pub async fn footer(
-        ctx: Context<'_>,
-        #[description = "Embed footer text"] footer: Option<String>,
-    ) -> Result<(), Error> {
-        CfgMemberLeave::footer_impl(ctx, footer).await
-    }
-
-    /// Configures the leave notification embed footer icon
-    #[poise::command(
-        slash_command,
-        required_permissions = "ADMINISTRATOR",
-        default_member_permissions = "ADMINISTRATOR",
-        guild_only,
-        rename = "footer-icon",
-        category = "Management"
-    )]
-    pub async fn footer_icon(
-        ctx: Context<'_>,
-        #[description = "Embed footer icon file upload"] footer_icon_file: Option<
-            serenity::Attachment,
-        >,
-        #[description = "Embed footer icon web url"] footer_icon_url: Option<String>,
-    ) -> Result<(), Error> {
-        CfgMemberLeave::footer_icon_impl(ctx, footer_icon_file, footer_icon_url).await
-    }
-}
-
-/// Tests the welcome functions by simulating a member joining the guild.
-#[poise::command(
-    slash_command,
-    prefix_command,
-    owners_only,
-    guild_only,
-    hide_in_help,
-    category = "Management"
-)]
-pub async fn test_member_add(ctx: Context<'_>) -> Result<(), Error> {
-    ctx.defer_ephemeral().await?;
-    let member = match ctx.author_member().await {
-        Some(member) => member,
-        None => return Err("Must be in guild".into()),
-    };
-    guild_member_add(ctx.serenity_context(), ctx.data(), &member).await?;
-    ctx.send(
-        CreateReply::default()
-            .content("Acknowledged!")
-            .ephemeral(true),
-    )
-    .await?;
-    Ok(())
-}
-
-/// Tests the welcome functions by simulating a member leaving the guild.
-#[poise::command(
-    slash_command,
-    prefix_command,
-    owners_only,
-    guild_only,
-    hide_in_help,
-    category = "Management"
-)]
-pub async fn test_member_remove(ctx: Context<'_>) -> Result<(), Error> {
-    ctx.defer_ephemeral().await?;
-    let guild_id = require_guild_id(ctx)?;
-    guild_member_remove(ctx.serenity_context(), ctx.data(), &guild_id, ctx.author()).await?;
-    ctx.send(
-        CreateReply::default()
-            .content("Acknowledged!")
-            .ephemeral(true),
-    )
-    .await?;
-    Ok(())
 }

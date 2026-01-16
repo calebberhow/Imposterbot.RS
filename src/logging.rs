@@ -1,38 +1,71 @@
 use std::path::PathBuf;
 
-use env_logger::{Builder, Env};
-use imposterbot::infrastructure::environment;
+use imposterbot::infrastructure::environment::{self, get_data_directory};
 use tracing::{error, info};
+use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
-pub fn init_logger() {
+/// Initializes the logger and returns a boxed reference to resources that if dropped will stop the logger.
+pub fn init_logger() -> Box<dyn std::any::Any> {
     let env_file = load_env_file();
-    init_env_logger();
+
+    let guard = init_tracing();
+
     info!("Starting Imposterbot...");
     log_env_file_result(env_file);
+
+    guard
 }
 
-fn get_log_path_var() -> Option<bool> {
+fn get_log_path_var() -> bool {
     match std::env::var(environment::LOG_PATH) {
         Ok(path) => match path.parse::<bool>() {
-            Ok(value) => Some(value),
+            Ok(value) => value,
             Err(e) => {
-                error!("Failed to parse the value: {:?}", e);
-                None
+                error!("Failed to parse {}: {:?}", environment::LOG_PATH, e);
+                false
             }
         },
-        Err(_) => None,
+        Err(_) => false,
     }
 }
 
-fn init_env_logger() {
-    let env = Env::default()
-        .filter_or(environment::LOG_LEVEL, "warn,imposterbot=info")
-        .write_style_or(environment::LOG_STYLE, "always");
-    Builder::from_env(env)
-        .default_format()
-        .format_source_path(get_log_path_var().unwrap_or(false))
-        .format_timestamp_millis()
+fn init_tracing() -> Box<dyn std::any::Any> {
+    // Rotate daily; options: Rotation::NEVER, Rotation::HOURLY, Rotation::DAILY
+    let log_dir = get_data_directory().join("logs");
+    std::fs::create_dir_all(&log_dir).expect("Log directory should be createable.");
+    let file_appender = tracing_appender::rolling::daily(log_dir, "imposterbot.log");
+
+    // Optional: keep last N files (needs extra code, not built-in)
+    let (non_blocking_writer, guard) = tracing_appender::non_blocking(file_appender);
+
+    let env_filter = EnvFilter::try_from_env(environment::LOG_LEVEL)
+        .unwrap_or_else(|_| EnvFilter::new("warn,imposterbot=info"));
+
+    let log_path = get_log_path_var();
+    tracing_subscriber::registry()
+        .with(env_filter)
+        // stdout layer
+        .with(
+            fmt::layer()
+                .with_writer(std::io::stdout)
+                .with_ansi(true)
+                .with_file(log_path)
+                .with_line_number(log_path)
+                .with_target(log_path)
+                .with_span_events(fmt::format::FmtSpan::CLOSE),
+        )
+        // file layer
+        .with(
+            fmt::layer()
+                .with_writer(non_blocking_writer)
+                .with_ansi(false)
+                .with_file(log_path)
+                .with_line_number(log_path)
+                .with_target(log_path)
+                .with_span_events(fmt::format::FmtSpan::CLOSE),
+        )
         .init();
+    Box::new(guard)
 }
 
 fn load_env_file() -> Option<PathBuf> {

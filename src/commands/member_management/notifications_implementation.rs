@@ -234,7 +234,7 @@ async fn create_file_from_attachment_safe(
 }
 
 /// Fully implements a notification management request, including database access, http requests for new attachments, and deletion of old attachments.
-#[tracing::instrument(level = Level::TRACE, skip(ctx))]
+#[tracing::instrument(level = Level::TRACE, err(level = Level::WARN), skip(ctx))]
 async fn configure_member_notifications_impl(
     ctx: Context<'_>,
     r#type: NotificationType,

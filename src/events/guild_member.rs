@@ -15,7 +15,7 @@ use poise::{
 };
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use strfmt::strfmt;
-use tracing::{error, trace};
+use tracing::{Level, error, trace};
 
 use crate::{
     Error, entities,
@@ -24,6 +24,7 @@ use crate::{
         environment::get_data_directory,
         ids::{id_from_string, id_to_string},
     },
+    record_member_fields,
 };
 
 enum MemberEvent<'a> {
@@ -499,12 +500,12 @@ async fn notify_member_event(
     Ok(())
 }
 
+#[tracing::instrument(level = Level::DEBUG, err(level = Level::WARN), skip_all)]
 async fn add_initial_member_roles(
     ctx: &Context,
     data: &Data,
     new_member: &Member,
 ) -> Result<(), Error> {
-    trace!("Added initial roles to {}", new_member.user.name);
     match get_member_roles_on_join(&data.db_pool, &new_member.guild_id).await {
         Some(roles) => match new_member.add_roles(ctx, &roles).await {
             Ok(_) => Ok(()),
@@ -514,12 +515,13 @@ async fn add_initial_member_roles(
     }
 }
 
+#[tracing::instrument(level = tracing::Level::INFO, err(level = tracing::Level::WARN), skip_all, fields(user = tracing::field::Empty, guild_id = tracing::field::Empty))]
 pub async fn guild_member_add(
     ctx: &Context,
     data: &Data,
     new_member: &Member,
 ) -> Result<(), Error> {
-    trace!("Guild member added {}", new_member.user.name);
+    record_member_fields!(new_member);
     if let Err(e) = notify_member_event(ctx, data, MemberEvent::Join(new_member)).await {
         error!("Failed to welcome new member: {}", e)
     }
@@ -529,12 +531,14 @@ pub async fn guild_member_add(
     Ok(())
 }
 
+#[tracing::instrument(level = tracing::Level::INFO, err(level = tracing::Level::WARN), skip_all, fields(user = tracing::field::Empty, guild_id = tracing::field::Empty))]
 pub async fn guild_member_remove(
     ctx: &Context,
     data: &Data,
     guild_id: &GuildId,
     user: &User,
 ) -> Result<(), Error> {
+    record_member_fields!(user, guild_id);
     if let Err(e) = notify_member_event(ctx, data, MemberEvent::Leave(guild_id, user)).await {
         error!("Failed to welcome member leave: {}", e)
     }

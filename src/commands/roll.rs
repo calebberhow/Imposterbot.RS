@@ -11,6 +11,7 @@ use crate::{
         environment::get_media_directory,
         util::{DebuggableReply, defer_or_broadcast},
     },
+    poise_instrument, record_ctx_fields,
 };
 
 #[derive(Debug, poise::ChoiceParameter, Clone, Copy)]
@@ -74,56 +75,54 @@ fn make_description(side: u8) -> String {
     format!("It rolled {}", side)
 }
 
-// TODO: add modifier and quantity optional parameters
-/// Rolls a dice
-#[poise::command(
-    slash_command,
-    prefix_command,
-    track_edits,
-    track_deletion,
-    category = "Fun",
-    aliases("dice")
-)]
-pub async fn roll(
-    ctx: Context<'_>,
-    #[description = "The type of die to roll"] dice: Dice,
-    #[description = "Visible to you only? (default: false)"] ephemeral: Option<bool>,
-) -> Result<(), Error> {
-    trace!(
-        dice = dice.as_str(),
-        ephemeral = ephemeral,
-        "Coinflip executed with args"
-    );
-    let _typing = defer_or_broadcast(ctx, ephemeral.unwrap_or_default()).await?;
+poise_instrument! {
+    // TODO: add modifier and quantity optional parameters
+    /// Rolls a dice
+    #[poise::command(
+        slash_command,
+        prefix_command,
+        track_edits,
+        track_deletion,
+        category = "Fun",
+        aliases("dice")
+    )]
+    pub async fn roll(
+        ctx: Context<'_>,
+        #[description = "The type of die to roll"] dice: Dice,
+        #[description = "Visible to you only? (default: false)"] ephemeral: Option<bool>,
+    ) -> Result<(), Error> {
+        record_ctx_fields!(ctx);
+        let _typing = defer_or_broadcast(ctx, ephemeral.unwrap_or_default()).await?;
 
-    let side = roll_dice(&dice);
-    let attachment = get_dice_attachment(&dice, side).await?;
+        let side = roll_dice(&dice);
+        let attachment = get_dice_attachment(&dice, side).await?;
 
-    let mut author = CreateEmbedAuthor::new(format!(
-        "{} rolls 1{:?}",
-        ctx.author()
-            .member
-            .as_ref()
-            .and_then(|m| m.nick.clone())
-            .unwrap_or(ctx.author().display_name().to_string()),
-        dice
-    ));
-    let avatar_url = ctx.author().avatar_url();
-    if let Some(s) = avatar_url {
-        author = author.icon_url(s);
+        let mut author = CreateEmbedAuthor::new(format!(
+            "{} rolls 1{:?}",
+            ctx.author()
+                .member
+                .as_ref()
+                .and_then(|m| m.nick.clone())
+                .unwrap_or(ctx.author().display_name().to_string()),
+            dice
+        ));
+        let avatar_url = ctx.author().avatar_url();
+        if let Some(s) = avatar_url {
+            author = author.icon_url(s);
+        }
+
+        let embed = CreateEmbed::new()
+            .thumbnail(format!("attachment://{}", attachment.filename))
+            .author(author)
+            .color(make_color(&dice, side))
+            .description(make_description(side));
+
+        let reply = CreateReply::default()
+            .embed(embed)
+            .attachment(attachment)
+            .ephemeral(ephemeral.unwrap_or_default());
+        trace!("Sending reply: {:?}", DebuggableReply::new(&reply));
+        ctx.send(reply).await?;
+        Ok(())
     }
-
-    let embed = CreateEmbed::new()
-        .thumbnail(format!("attachment://{}", attachment.filename))
-        .author(author)
-        .color(make_color(&dice, side))
-        .description(make_description(side));
-
-    let reply = CreateReply::default()
-        .embed(embed)
-        .attachment(attachment)
-        .ephemeral(ephemeral.unwrap_or_default());
-    trace!("Sending reply: {:?}", DebuggableReply::new(&reply));
-    ctx.send(reply).await?;
-    Ok(())
 }

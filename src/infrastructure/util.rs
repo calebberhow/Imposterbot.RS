@@ -17,6 +17,47 @@ macro_rules! lazy_regex {
     };
 }
 
+/// Fills user / guild_id / channel_id fields
+#[macro_export]
+macro_rules! record_ctx_fields {
+    ($ctx:expr) => {{
+        let span = tracing::Span::current();
+        span.record("user", $ctx.author().name.as_str());
+        span.record("guild_id", $ctx.guild_id().map(|g| g.get()));
+        span.record("channel_id", $ctx.channel_id().get());
+    }};
+}
+
+/// Fills user / guild_id / channel_id fields
+#[macro_export]
+macro_rules! record_member_fields {
+    ($member:expr) => {{
+        let span = tracing::Span::current();
+        span.record("user", $member.user.name.as_str());
+        span.record("guild_id", $member.guild_id.get());
+    }};
+    ($user:expr, $guild:expr) => {{
+        let span = tracing::Span::current();
+        span.record("user", $user.name.as_str());
+        span.record("guild_id", $guild.get());
+    }};
+}
+
+/// Attach standard user/guild/channel fields to a span for a command
+#[macro_export]
+macro_rules! poise_instrument {
+    ($fn:item) => {
+        #[tracing::instrument(level = tracing::Level::INFO, err(level = tracing::Level::WARN), skip(ctx), fields(user = tracing::field::Empty, guild_id = tracing::field::Empty, channel_id = tracing::field::Empty))]
+        $fn
+    };
+    ( $( $fn:item )+ ) => {
+        $(
+            #[tracing::instrument(level = tracing::Level::INFO, err(level = tracing::Level::WARN), skip(ctx), fields(user = tracing::field::Empty, guild_id = tracing::field::Empty, channel_id = tracing::field::Empty))]
+            $fn
+        )+
+    };
+}
+
 pub struct DebuggableReply(CreateReply);
 
 #[derive(Clone, Debug, PartialEq)]

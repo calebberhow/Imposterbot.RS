@@ -7,7 +7,7 @@ use tracing::info;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    logging::init_logger();
+    let _guard = logging::init_logger();
     let db = database::init_database().await?;
 
     let mut client = client::create_serenity_client(db).await?;

@@ -4,6 +4,7 @@ use std::sync::Arc;
 use crate::{
     Context, Error,
     infrastructure::{environment::get_media_directory, ids::require_guild_id},
+    poise_instrument, record_ctx_fields,
 };
 use poise::CreateReply;
 use poise::serenity_prelude::ChannelId;
@@ -41,93 +42,92 @@ pub async fn play(_ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-#[poise::command(slash_command, guild_only)]
-pub async fn mariah(ctx: Context<'_>, channel: Option<ChannelId>) -> Result<(), Error> {
-    let file = get_media_directory().join("opus").join("mariah.opus");
-    let guild_id = require_guild_id(ctx)?;
-    let channel_id = match channel {
-        Some(x) => Ok(x),
-        None => {
-            let voice_state = guild_id
-                .get_user_voice_state(&ctx.serenity_context().http, ctx.author().id)
-                .await?;
+poise_instrument! {
+    /// Plays mariah carey christmas music in voice
+    #[poise::command(slash_command, guild_only)]
+    pub async fn mariah(ctx: Context<'_>, channel: Option<ChannelId>) -> Result<(), Error> {
+        record_ctx_fields!(ctx);
+        let file = get_media_directory().join("opus").join("mariah.opus");
+        let guild_id = require_guild_id(ctx)?;
+        let channel_id = match channel {
+            Some(x) => Ok(x),
+            None => {
+                let voice_state = guild_id
+                    .get_user_voice_state(&ctx.serenity_context().http, ctx.author().id)
+                    .await?;
 
-            voice_state
-                .channel_id
-                .ok_or::<Error>("You must specify a channel or be in a voice channel.".into())
-        }
-    }?;
-
-    let voice_manager = songbird::get(ctx.serenity_context())
-        .await
-        .expect("Songbird Voice Client registered at startup")
-        .clone();
-
-    match voice_manager.join(guild_id, channel_id).await {
-        Ok(_) => match play_from_file(ctx, file).await {
-            Ok(track) => {
-                track.add_event(
-                    Event::Track(TrackEvent::End),
-                    TrackEndNotifier {
-                        guild_id,
-                        manager: voice_manager.clone(),
-                    },
-                )?;
-                ctx.send(
-                    CreateReply::default()
-                        .content("Playing mariah carey!")
-                        .reply(true),
-                )
-                .await?;
+                voice_state
+                    .channel_id
+                    .ok_or::<Error>("You must specify a channel or be in a voice channel.".into())
             }
-            Err(play_err) => {
+        }?;
+
+        let voice_manager = songbird::get(ctx.serenity_context())
+            .await
+            .expect("Songbird Voice Client registered at startup")
+            .clone();
+
+        match voice_manager.join(guild_id, channel_id).await {
+            Ok(_) => match play_from_file(ctx, file).await {
+                Ok(track) => {
+                    track.add_event(
+                        Event::Track(TrackEvent::End),
+                        TrackEndNotifier {
+                            guild_id,
+                            manager: voice_manager.clone(),
+                        },
+                    )?;
+                    ctx.send(
+                        CreateReply::default()
+                            .content("Playing mariah carey!")
+                            .reply(true),
+                    )
+                    .await?;
+                }
+                Err(play_err) => {
+                    warn!(
+                        guild_id = guild_id.get(),
+                        channel_id = channel_id.get(),
+                        "Voice manager had an error attempting to play mariah carey: {:?}",
+                        play_err
+                    );
+                    ctx.send(
+                        CreateReply::default()
+                            .content("Cannot play mariah carey... :(")
+                            .ephemeral(true)
+                            .reply(true),
+                    )
+                    .await?;
+                }
+            },
+            Err(join_err) => {
                 warn!(
                     guild_id = guild_id.get(),
                     channel_id = channel_id.get(),
-                    "Voice manager had an error attempting to play mariah carey: {:?}",
-                    play_err
+                    "Voice manager had an error while joining channel: {:?}",
+                    join_err
                 );
                 ctx.send(
                     CreateReply::default()
-                        .content("Cannot play mariah carey... :(")
+                        .content("Cannot join channel...")
                         .ephemeral(true)
                         .reply(true),
                 )
                 .await?;
             }
-        },
-        Err(join_err) => {
-            warn!(
-                guild_id = guild_id.get(),
-                channel_id = channel_id.get(),
-                "Voice manager had an error while joining channel: {:?}",
-                join_err
-            );
-            ctx.send(
-                CreateReply::default()
-                    .content("Cannot join channel...")
-                    .ephemeral(true)
-                    .reply(true),
-            )
-            .await?;
         }
+        Ok(())
     }
-    Ok(())
 }
 
 #[cfg(feature = "youtube")]
+#[tracing::instrument(level = tracing::Level::TRACE, skip(ctx))]
 async fn youtube_search_autocomplete<'a>(
     ctx: Context<'a>,
     partial: &'a str,
 ) -> impl poise::serenity_prelude::futures::Stream<Item = String> + 'a {
     use poise::serenity_prelude::futures::{StreamExt, stream};
     use songbird::input::YoutubeDl;
-
-    // Get guild id
-    tracing::debug!(
-        partial = partial,
-        "youtube_search_autocomplete executed with args"
-    );
 
     let http_client = {
         let data = ctx.serenity_context().data.read().await;
@@ -152,112 +152,120 @@ async fn youtube_search_autocomplete<'a>(
     }
 }
 
-#[cfg(feature = "youtube")]
-#[poise::command(slash_command, guild_only)]
-pub async fn youtube(
-    ctx: Context<'_>,
-    #[autocomplete = "youtube_search_autocomplete"] video: String,
-    channel: Option<ChannelId>,
-) -> Result<(), Error> {
-    ctx.defer().await?;
-    let guild_id = require_guild_id(ctx)?;
-    let channel_id = match channel {
-        Some(x) => Ok(x),
-        None => {
-            let voice_state = guild_id
-                .get_user_voice_state(&ctx.serenity_context().http, ctx.author().id)
-                .await?;
+poise_instrument! {
+    #[cfg(feature = "youtube")]
+    #[poise::command(slash_command, guild_only)]
+    pub async fn youtube(
+        ctx: Context<'_>,
+        #[autocomplete = "youtube_search_autocomplete"] video: String,
+        channel: Option<ChannelId>,
+    ) -> Result<(), Error> {
+        record_ctx_fields!(ctx);
 
-            voice_state
-                .channel_id
-                .ok_or::<Error>("You must specify a channel or be in a voice channel.".into())
-        }
-    }?;
+        ctx.defer().await?;
+        let guild_id = require_guild_id(ctx)?;
+        let channel_id = match channel {
+            Some(x) => Ok(x),
+            None => {
+                let voice_state = guild_id
+                    .get_user_voice_state(&ctx.serenity_context().http, ctx.author().id)
+                    .await?;
 
-    let voice_manager = songbird::get(ctx.serenity_context())
-        .await
-        .expect("Songbird Voice Client registered at startup")
-        .clone();
-
-    match voice_manager.join(guild_id, channel_id).await {
-        Ok(_) => match play_from_youtube(ctx, video.into()).await {
-            Ok((meta, track)) => {
-                track.add_event(
-                    Event::Track(TrackEvent::End),
-                    TrackEndNotifier {
-                        guild_id,
-                        manager: voice_manager.clone(),
-                    },
-                )?;
-                let reply = match meta {
-                    Some(meta) => CreateReply::default().embed(get_track_embed(meta)),
-                    None => CreateReply::default().content("Playing from youtube"),
-                };
-                ctx.send(reply.reply(true)).await?;
+                voice_state
+                    .channel_id
+                    .ok_or::<Error>("You must specify a channel or be in a voice channel.".into())
             }
-            Err(play_err) => {
+        }?;
+
+        let voice_manager = songbird::get(ctx.serenity_context())
+            .await
+            .expect("Songbird Voice Client registered at startup")
+            .clone();
+
+        match voice_manager.join(guild_id, channel_id).await {
+            Ok(_) => match play_from_youtube(ctx, video.into()).await {
+                Ok((meta, track)) => {
+                    track.add_event(
+                        Event::Track(TrackEvent::End),
+                        TrackEndNotifier {
+                            guild_id,
+                            manager: voice_manager.clone(),
+                        },
+                    )?;
+                    let reply = match meta {
+                        Some(meta) => CreateReply::default().embed(get_track_embed(meta)),
+                        None => CreateReply::default().content("Playing from youtube"),
+                    };
+                    ctx.send(reply.reply(true)).await?;
+                }
+                Err(play_err) => {
+                    warn!(
+                        guild_id = guild_id.get(),
+                        channel_id = channel_id.get(),
+                        "Voice manager had an error attempting to play video: {:?}",
+                        play_err
+                    );
+                    ctx.send(
+                        CreateReply::default()
+                            .content("Cannot play video... :(")
+                            .ephemeral(true)
+                            .reply(true),
+                    )
+                    .await?;
+                }
+            },
+            Err(join_err) => {
                 warn!(
                     guild_id = guild_id.get(),
                     channel_id = channel_id.get(),
-                    "Voice manager had an error attempting to play video: {:?}",
-                    play_err
+                    "Voice manager had an error while joining channel: {:?}",
+                    join_err
                 );
                 ctx.send(
                     CreateReply::default()
-                        .content("Cannot play video... :(")
+                        .content("Cannot join channel...")
                         .ephemeral(true)
                         .reply(true),
                 )
                 .await?;
             }
-        },
-        Err(join_err) => {
-            warn!(
-                guild_id = guild_id.get(),
-                channel_id = channel_id.get(),
-                "Voice manager had an error while joining channel: {:?}",
-                join_err
-            );
-            ctx.send(
-                CreateReply::default()
-                    .content("Cannot join channel...")
-                    .ephemeral(true)
-                    .reply(true),
-            )
-            .await?;
         }
+        Ok(())
     }
-    Ok(())
 }
 
-#[poise::command(slash_command, guild_only)]
-pub async fn stop(ctx: Context<'_>) -> Result<(), Error> {
-    let voice_manager = songbird::get(ctx.serenity_context())
-        .await
-        .expect("Songbird Voice Client registered at startup")
-        .clone();
-    let guild_id = require_guild_id(ctx)?;
-    match voice_manager.remove(guild_id).await {
-        Ok(_) => Ok::<(), Error>(()),
-        Err(join_error) => match join_error {
-            JoinError::NoCall => {
-                ctx.send(
-                    CreateReply::default()
-                        .content("I am not in any voice channel...")
-                        .ephemeral(true)
-                        .reply(true),
-                )
-                .await?;
-                return Ok(());
-            }
-            e => Err(e.into()),
-        },
-    }?;
+poise_instrument! {
+    /// Forces the bot to stop playing audio and leave the voice channel.
+    #[poise::command(slash_command, guild_only)]
+    pub async fn stop(ctx: Context<'_>) -> Result<(), Error> {
+        record_ctx_fields!(ctx);
+        let voice_manager = songbird::get(ctx.serenity_context())
+            .await
+            .expect("Songbird Voice Client registered at startup")
+            .clone();
+        let guild_id = require_guild_id(ctx)?;
+        match voice_manager.remove(guild_id).await {
+            Ok(_) => Ok::<(), Error>(()),
+            Err(join_error) => match join_error {
+                JoinError::NoCall => {
+                    ctx.send(
+                        CreateReply::default()
+                            .content("I am not in any voice channel...")
+                            .ephemeral(true)
+                            .reply(true),
+                    )
+                    .await?;
+                    return Ok(());
+                }
+                e => Err(e.into()),
+            },
+        }?;
 
-    ctx.send(CreateReply::default().content("Stopping!").reply(true))
-        .await?;
+        ctx.send(CreateReply::default().content("Stopping!").reply(true))
+            .await?;
 
-    Ok(())
+        Ok(())
+    }
 }
 
 #[cfg(feature = "youtube")]

@@ -1,14 +1,10 @@
-use std::{
-    collections::HashSet,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{collections::HashSet, sync::Arc, time::Duration};
 
 use anyhow::Context as _;
 use imposterbot::infrastructure::{botdata::Data, environment, environment::env_var_with_context};
 use poise::serenity_prelude::{self as serenity, GatewayIntents, UserId};
 use sea_orm::DatabaseConnection;
-use tracing::{debug, error, info, warn};
+use tracing::{error, info, warn};
 
 pub async fn create_serenity_client(db: DatabaseConnection) -> anyhow::Result<serenity::Client> {
     let token = env_var_with_context(environment::DISCORD_TOKEN)?;
@@ -70,42 +66,6 @@ fn create_poise_framework(pool: DatabaseConnection) -> poise::Framework<Data, im
             },
             initialize_owners: initialize_owners,
             owners: owners,
-            pre_command: |ctx| {
-                Box::pin(async move {
-                    info!(
-                        "Executing Command: {:?} for {} ({})",
-                        ctx.command().name,
-                        ctx.author()
-                            .clone()
-                            .member
-                            .and_then(|m| m.nick)
-                            .unwrap_or(ctx.author().display_name().to_string()),
-                        ctx.author().name,
-                    );
-
-                    if let Ok(mut invoc_time) = ctx.data().invoc_time.write() {
-                        invoc_time.insert(ctx.id(), Instant::now());
-                    }
-                })
-            },
-            post_command: |ctx| {
-                Box::pin(async move {
-                    if let Ok(invoc_time_map) = ctx.data().invoc_time.read() {
-                        let start_time = invoc_time_map.get(&ctx.id());
-                        match start_time {
-                            Some(start_time) => {
-                                let duration = start_time.elapsed();
-                                debug!("Command {} finished in {:?}", ctx.command().name, duration);
-                            }
-                            None => {
-                                error!(
-                                    "Post-command hook called for command without a start-time set."
-                                );
-                            }
-                        }
-                    }
-                })
-            },
             on_error: |error| {
                 Box::pin(async move {
                     if let Err(e) = poise::builtins::on_error(error).await {

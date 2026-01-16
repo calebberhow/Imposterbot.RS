@@ -1,7 +1,6 @@
 use std::num::ParseIntError;
 
 use poise::serenity_prelude::{GuildId, UserId};
-use tracing::trace;
 
 use crate::{Context, Error};
 
@@ -12,7 +11,6 @@ pub fn require_guild_id(ctx: Context<'_>) -> Result<GuildId, Error> {
     let guild_id = ctx
         .guild_id()
         .ok_or("This function is only available in guilds")?;
-    trace!("Found guild_id={:?}", guild_id);
     Ok(guild_id)
 }
 
