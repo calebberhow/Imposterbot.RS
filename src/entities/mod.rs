@@ -3,5 +3,6 @@
 pub mod prelude;
 
 pub mod mc_server;
-pub mod welcome_channel;
+pub mod member_notification_channel;
+pub mod member_notification_message;
 pub mod welcome_roles;

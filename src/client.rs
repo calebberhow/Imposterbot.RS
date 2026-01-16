@@ -144,11 +144,13 @@ fn get_enabled_commands() -> Vec<poise::Command<Data, imposterbot::Error>> {
         imposterbot::commands::minecraft::mc(),
         imposterbot::commands::roll::roll(),
         imposterbot::commands::coinflip::coinflip(),
-        imposterbot::commands::member_management::configure_welcome_channel(),
-        imposterbot::commands::member_management::add_default_member_role(),
-        imposterbot::commands::member_management::remove_default_member_role(),
-        imposterbot::commands::member_management::test_member_add(),
-        imposterbot::commands::member_management::test_member_remove(),
+        imposterbot::commands::member_management::channels::configure_welcome_channel(),
+        imposterbot::commands::member_management::channels::configure_leave_channel(),
+        imposterbot::commands::member_management::roles::add_default_member_role(),
+        imposterbot::commands::member_management::roles::remove_default_member_role(),
+        imposterbot::commands::member_management::notifications::test_member_add(),
+        imposterbot::commands::member_management::notifications::test_member_remove(),
+        imposterbot::commands::member_management::notifications::cfg_member_notification(),
         #[cfg(feature = "voice")]
         imposterbot::commands::voice::play(),
     ];
