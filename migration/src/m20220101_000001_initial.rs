@@ -10,7 +10,6 @@ impl MigrationTrait for Migration {
             .create_table(
                 Table::create()
                     .table(McServer::Table)
-                    .if_not_exists()
                     .col(string(McServer::GuildId))
                     .col(text(McServer::Name))
                     .col(text(McServer::Address))
@@ -33,7 +32,6 @@ impl MigrationTrait for Migration {
             .create_table(
                 Table::create()
                     .table(WelcomeChannel::Table)
-                    .if_not_exists()
                     .col(string(WelcomeChannel::GuildId).primary_key())
                     .col(string(WelcomeChannel::ChannelId))
                     .to_owned(),
@@ -43,7 +41,6 @@ impl MigrationTrait for Migration {
             .create_table(
                 Table::create()
                     .table(WelcomeRoles::Table)
-                    .if_not_exists()
                     .col(string(WelcomeRoles::GuildId))
                     .col(string(WelcomeRoles::RoleId))
                     .primary_key(
@@ -87,7 +84,7 @@ enum McServer {
 }
 
 #[derive(DeriveIden)]
-enum WelcomeChannel {
+pub enum WelcomeChannel {
     Table,
     GuildId,
     ChannelId,

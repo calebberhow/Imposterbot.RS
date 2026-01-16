@@ -1,4 +1,5 @@
 use anyhow::Context as _;
+use poise::serenity_prelude::GuildId;
 use std::{
     env::var,
     path::{Path, PathBuf},
@@ -36,4 +37,10 @@ pub fn get_data_directory() -> PathBuf {
 pub fn get_media_directory() -> PathBuf {
     let st: String = var(MEDIA_DIRECTORY).unwrap_or_else(|_| "./media".to_string());
     Path::new(st.as_str()).to_owned()
+}
+
+pub fn get_guild_user_content_directory(guild_id: GuildId) -> PathBuf {
+    get_data_directory()
+        .join("user_content")
+        .join(crate::infrastructure::ids::id_to_string(guild_id))
 }

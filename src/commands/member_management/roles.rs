@@ -1,8 +1,7 @@
-use migration::OnConflict;
 use poise::{
     CreateReply,
     serenity_prelude::{
-        GuildChannel, RoleId,
+        RoleId,
         futures::{self, Stream, StreamExt},
     },
 };
@@ -11,8 +10,8 @@ use tracing::{debug, trace};
 
 use crate::{
     Context, Error,
-    entities::{welcome_channel, welcome_roles},
-    events::guild_member::{get_member_roles_on_join, guild_member_add, guild_member_remove},
+    entities::welcome_roles,
+    events::guild_member::get_member_roles_on_join,
     infrastructure::ids::{id_to_string, require_guild_id},
 };
 
@@ -37,56 +36,6 @@ async fn default_role_autocomplete<'a>(
         .map(|r| id_to_string(r.clone()));
 
     futures::stream::iter(roles).boxed()
-}
-
-/// Configures a channel for the bot to send welcome and goodbye messages to.
-#[poise::command(
-    slash_command,
-    prefix_command,
-    required_permissions = "ADMINISTRATOR",
-    default_member_permissions = "ADMINISTRATOR",
-    guild_only,
-    category = "Management"
-)]
-pub async fn configure_welcome_channel(
-    ctx: Context<'_>,
-    channel: Option<GuildChannel>,
-) -> Result<(), Error> {
-    trace!("configured welcome channel: {:?}", channel);
-    let guild_id = require_guild_id(ctx)?;
-
-    if let Some(channel) = channel {
-        welcome_channel::Entity::insert(welcome_channel::ActiveModel {
-            guild_id: Set(id_to_string(guild_id.clone())),
-            channel_id: Set(id_to_string(channel.id.clone())),
-        })
-        .on_conflict(
-            OnConflict::column(welcome_channel::Column::GuildId)
-                .update_columns([welcome_channel::Column::ChannelId])
-                .to_owned(),
-        )
-        .exec(&ctx.data().db_pool)
-        .await?;
-        ctx.send(
-            CreateReply::default()
-                .content("Successfully set welcome channel")
-                .ephemeral(true),
-        )
-        .await?;
-    } else {
-        welcome_channel::Entity::delete_by_id(id_to_string(guild_id))
-            .exec(&ctx.data().db_pool)
-            .await?;
-
-        ctx.send(
-            CreateReply::default()
-                .content("Successfully removed welcome channel")
-                .ephemeral(true),
-        )
-        .await?;
-    }
-
-    Ok(())
 }
 
 /// Adds a role that will be applied to all new members when they join.
@@ -165,50 +114,5 @@ pub async fn remove_default_member_role(
         }
     }
 
-    Ok(())
-}
-
-/// Tests the welcome functions by simulating a member joining the guild.
-#[poise::command(
-    slash_command,
-    prefix_command,
-    owners_only,
-    guild_only,
-    hide_in_help,
-    category = "Management"
-)]
-pub async fn test_member_add(ctx: Context<'_>) -> Result<(), Error> {
-    let member = match ctx.author_member().await {
-        Some(member) => member,
-        None => return Err("Must be in guild".into()),
-    };
-    guild_member_add(ctx.serenity_context(), ctx.data(), &member).await?;
-    ctx.send(
-        CreateReply::default()
-            .content("Acknowledged!")
-            .ephemeral(true),
-    )
-    .await?;
-    Ok(())
-}
-
-/// Tests the welcome functions by simulating a member leaving the guild.
-#[poise::command(
-    slash_command,
-    prefix_command,
-    owners_only,
-    guild_only,
-    hide_in_help,
-    category = "Management"
-)]
-pub async fn test_member_remove(ctx: Context<'_>) -> Result<(), Error> {
-    let guild_id = require_guild_id(ctx)?;
-    guild_member_remove(ctx.serenity_context(), ctx.data(), &guild_id, ctx.author()).await?;
-    ctx.send(
-        CreateReply::default()
-            .content("Acknowledged!")
-            .ephemeral(true),
-    )
-    .await?;
     Ok(())
 }
