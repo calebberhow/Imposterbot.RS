@@ -14,7 +14,8 @@ use tracing::{Level, error, trace, warn};
 use uuid::Uuid;
 
 use crate::{
-    Context, Error, entities,
+    Context, Error,
+    entities::{self, member_notification_message},
     events::guild_member::MemberNotificationFile,
     infrastructure::{
         environment::get_guild_user_content_directory,
@@ -32,11 +33,16 @@ pub enum NotificationType {
 struct NotificationManagementRequest {
     pub content: Option<String>,
     pub clear_content: Option<bool>,
+    pub title: Option<String>,
+    pub clear_title: Option<bool>,
     pub description: Option<String>,
     pub clear_description: Option<bool>,
     pub thumbnail_file: Option<serenity::Attachment>,
     pub thumbnail_url: Option<String>,
     pub clear_thumbnail: Option<bool>,
+    pub image_file: Option<serenity::Attachment>,
+    pub image_url: Option<String>,
+    pub clear_image: Option<bool>,
     pub author: Option<String>,
     pub clear_author: Option<bool>,
     pub author_icon_file: Option<serenity::Attachment>,
@@ -56,6 +62,12 @@ impl NotificationManagementRequest {
         self
     }
 
+    fn required_title(mut self, value: Option<String>) -> Self {
+        self.clear_title = Some(value.is_none());
+        self.title = value;
+        self
+    }
+
     fn required_description(mut self, value: Option<String>) -> Self {
         self.clear_description = Some(value.is_none());
         self.description = value;
@@ -70,6 +82,13 @@ impl NotificationManagementRequest {
         self.clear_thumbnail = Some(file.is_none() && url.is_none());
         self.thumbnail_file = file;
         self.thumbnail_url = url;
+        self
+    }
+
+    fn required_image(mut self, file: Option<serenity::Attachment>, url: Option<String>) -> Self {
+        self.clear_image = Some(file.is_none() && url.is_none());
+        self.image_file = file;
+        self.image_url = url;
         self
     }
 
@@ -274,10 +293,15 @@ async fn configure_member_notifications_impl(
     .await?;
 
     let content = apply_clear(request.content, request.clear_content);
+    let title = apply_clear(request.title, request.clear_title);
     let description = apply_clear(request.description, request.clear_description);
     let thumbnail = apply_clear(
         get_file_attachment(request.thumbnail_url, &request.thumbnail_file),
         request.clear_thumbnail,
+    );
+    let image = apply_clear(
+        get_file_attachment(request.image_url, &request.image_file),
+        request.clear_image,
     );
     let author = apply_clear(request.author, request.clear_author);
     let author_icon = apply_clear(
@@ -292,21 +316,28 @@ async fn configure_member_notifications_impl(
 
     let mut files_to_delete: Vec<String> = vec![];
     let mut files_added: Vec<String> = vec![];
-    let mut model = match existing {
-        Some(row) => row.into_active_model(),
-        None => entities::member_notification_message::ActiveModel {
-            guild_id: Set(id_to_string(guild_id.clone())),
-            join: Set(is_join),
-            ..Default::default()
-        },
+    let (mut model, update) = match existing {
+        Some(row) => (row.into_active_model(), true),
+        None => (
+            entities::member_notification_message::ActiveModel {
+                guild_id: Set(id_to_string(guild_id.clone())),
+                join: Set(is_join),
+                ..Default::default()
+            },
+            false,
+        ),
     };
 
     if let Some(x) = content {
-        model.content = Set(x);
+        model.content = Set(x.replace("\\n", "\n"));
+    }
+
+    if let Some(x) = title {
+        model.title = Set(x.replace("\\n", "\n"));
     }
 
     if let Some(x) = description {
-        model.description = Set(x);
+        model.description = Set(x.replace("\\n", "\n"));
     }
 
     if let Some(x) = thumbnail {
@@ -334,8 +365,31 @@ async fn configure_member_notifications_impl(
         }
     }
 
+    if let Some(x) = image {
+        if let Some(old_file) = active_model_file_attachment(model.image_is_file, model.image_url) {
+            files_to_delete.push(old_file.clone());
+        }
+
+        model.image_is_file = Set(x.attachment);
+        model.image_url = Set(x.url.clone());
+
+        if x.attachment
+            && !x.url.is_empty()
+            && let Some(attachment) = request.image_file
+        {
+            match create_file_from_attachment_safe(&guild_id, attachment, &mut files_added).await {
+                Ok(filename) => {
+                    model.image_url = Set(filename);
+                }
+                Err(e) => {
+                    return Err(e);
+                }
+            }
+        }
+    }
+
     if let Some(x) = author {
-        model.author = Set(x);
+        model.author = Set(x.replace("\\n", "\n"));
     }
 
     if let Some(x) = author_icon {
@@ -364,7 +418,7 @@ async fn configure_member_notifications_impl(
     }
 
     if let Some(x) = footer {
-        model.footer = Set(x);
+        model.footer = Set(x.replace("\\n", "\n"));
     }
 
     if let Some(x) = footer_icon {
@@ -392,7 +446,13 @@ async fn configure_member_notifications_impl(
         }
     }
 
-    model.update(&ctx.data().db_pool).await?;
+    if update {
+        model.update(&ctx.data().db_pool).await?;
+    } else {
+        member_notification_message::Entity::insert(model)
+            .exec(&ctx.data().db_pool)
+            .await?;
+    }
 
     // Delete old files from disk
     if !files_to_delete.is_empty() {
@@ -524,9 +584,12 @@ pub trait MemberEventConfigurer {
     fn full_impl<'a>(
         ctx: Context<'a>,
         content: Option<String>,
+        title: Option<String>,
         description: Option<String>,
         thumbnail_file: Option<serenity::Attachment>,
         thumbnail_url: Option<String>,
+        image_file: Option<serenity::Attachment>,
+        image_url: Option<String>,
         author: Option<String>,
         author_icon_file: Option<serenity::Attachment>,
         author_icon_url: Option<String>,
@@ -540,8 +603,10 @@ pub trait MemberEventConfigurer {
                 Self::NOTIFICATION_TYPE,
                 NotificationManagementRequest::default()
                     .required_content(content)
+                    .required_title(title)
                     .required_description(description)
                     .required_thumbnail(thumbnail_file, thumbnail_url)
+                    .required_image(image_file, image_url)
                     .required_author(author)
                     .required_author_icon(author_icon_file, author_icon_url)
                     .required_footer(footer)
@@ -552,6 +617,7 @@ pub trait MemberEventConfigurer {
     }
 
     member_cmd_impl!(content_impl, content, required_content);
+    member_cmd_impl!(title_impl, description, required_title);
     member_cmd_impl!(description_impl, description, required_description);
     member_cmd_impl!(
         thumbnail_impl,
@@ -559,6 +625,7 @@ pub trait MemberEventConfigurer {
         thumbnail_url,
         required_thumbnail
     );
+    member_cmd_impl!(image_impl, image_file, image_url, required_image);
     member_cmd_impl!(author_impl, author, required_author);
     member_cmd_impl!(
         author_icon_impl,

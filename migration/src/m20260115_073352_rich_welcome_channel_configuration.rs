@@ -20,6 +20,11 @@ impl MigrationTrait for Migration {
                             .default(""),
                     )
                     .col(
+                        text(MemberNotificationMessage::Title)
+                            .not_null()
+                            .default(""),
+                    )
+                    .col(
                         text(MemberNotificationMessage::Description)
                             .not_null()
                             .default(""),
@@ -31,6 +36,16 @@ impl MigrationTrait for Migration {
                     )
                     .col(
                         text(MemberNotificationMessage::ThumbnailUrl)
+                            .not_null()
+                            .default(""),
+                    )
+                    .col(
+                        boolean(MemberNotificationMessage::ImageIsFile)
+                            .not_null()
+                            .default(false),
+                    )
+                    .col(
+                        text(MemberNotificationMessage::ImageUrl)
                             .not_null()
                             .default(""),
                     )
@@ -150,9 +165,12 @@ enum MemberNotificationMessage {
     GuildId, // Primary Key
     Join,    // Primary Key
     Content,
+    Title,
     Description,
     ThumbnailIsFile,
     ThumbnailUrl,
+    ImageIsFile,
+    ImageUrl,
     Author,
     AuthorIconIsFile,
     AuthorIconUrl,

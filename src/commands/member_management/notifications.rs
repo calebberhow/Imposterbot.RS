@@ -20,9 +20,10 @@ This command can be used to make incremental updates to a notification format, o
 
 static HELP_IMAGES: &'static str = r#"
 There are 3 places where an image can appear in the message:
-1. thumbnail: large and on the right of the message,
-2. author-icon: small and next to the author text,
-3. footer-icon: small and next to the footer text.
+1. thumbnail: large and at the top right of the embed,
+2. main image: large image at the bottom of the embed
+3. author-icon: small and next to the embed author text,
+4. footer-icon: small and next to the embed footer text.
 
 To specify an image in one of these locations use one of the appropriate `_file` or `_url` fields (but not both).
 The `_url` field allows you to specify a web url to the content, and the `_file` field allows you to upload media to Imposterbot directly.
@@ -36,6 +37,8 @@ When sending the message, Imposterbot will replace the following items with thei
 - `{user_avatar}` -> url of user's avatar: If placed in a _url field (`thumbnail_url`, `author_icon_url`, or `footer_icon_url`), it will be rendered as an image.
 - `{member_count}` -> current member count of the guild
 - `{online_member_count}` -> current number of online members in the guild
+
+Note: discord does not allow entering line breaks in command parameters, but you can get around this with `\n`.
 "#;
 
 static HELP_EXAMPLES: &'static str = r#"
@@ -57,20 +60,24 @@ Update the plain-text content of the join notification:
 
 static HELP_LIST: &'static str = r#"
 - `/notify-member join full`
+- `/notify-member join title`
 - `/notify-member join content`
 - `/notify-member join description`
 - `/notify-member join author`
 - `/notify-member join footer`
 - `/notify-member join thumbnail`
+- `/notify-member join image`
 - `/notify-member join author-icon`
 - `/notify-member join footer-icon`
 
 - `/notify-member leave full`
+- `/notify-member leave title`
 - `/notify-member leave content`
 - `/notify-member leave description`
 - `/notify-member leave author`
 - `/notify-member leave footer`
 - `/notify-member leave thumbnail`
+- `/notify-member leave image`
 - `/notify-member leave author-icon`
 - `/notify-member leave footer-icon`
 "#;
@@ -135,15 +142,17 @@ impl CfgMemberJoin {
         subcommands(
             "CfgMemberJoin::full",
             "CfgMemberJoin::content",
+            "CfgMemberJoin::title",
             "CfgMemberJoin::description",
             "CfgMemberJoin::thumbnail",
+            "CfgMemberJoin::image",
             "CfgMemberJoin::author",
             "CfgMemberJoin::author_icon",
             "CfgMemberJoin::footer",
             "CfgMemberJoin::footer_icon",
         )
     )]
-    pub async fn group(_ctx: Context<'_>) -> Result<(), Error> {
+    async fn group(_ctx: Context<'_>) -> Result<(), Error> {
         Ok(())
     }
 
@@ -157,12 +166,15 @@ impl CfgMemberJoin {
             rename = "full",
             category = "Management"
         )]
-        pub async fn full(
+        async fn full(
             ctx: Context<'_>,
             #[description = "Plain-text content of the notification message"] content: Option<String>,
+            #[description = "Embed title text"] title: Option<String>,
             #[description = "Embed description text"] description: Option<String>,
             #[description = "Embed thumbnail file upload"] thumbnail_file: Option<serenity::Attachment>,
             #[description = "Embed thumbnail web url"] thumbnail_url: Option<String>,
+            #[description = "Embed image file upload"] image_file: Option<serenity::Attachment>,
+            #[description = "Embed image web url"] image_url: Option<String>,
             #[description = "Embed author text"] author: Option<String>,
             #[description = "Embed author icon file upload"] author_icon_file: Option<
                 serenity::Attachment,
@@ -178,9 +190,12 @@ impl CfgMemberJoin {
             CfgMemberJoin::full_impl(
                 ctx,
                 content,
+                title,
                 description,
                 thumbnail_file,
                 thumbnail_url,
+                image_file,
+                image_url,
                 author,
                 author_icon_file,
                 author_icon_url,
@@ -199,12 +214,28 @@ impl CfgMemberJoin {
             guild_only,
             category = "Management"
         )]
-        pub async fn content(
+        async fn content(
             ctx: Context<'_>,
             #[description = "Plain-text content of the notification message"] content: Option<String>, // param matches func name
         ) -> Result<(), Error> {
             record_ctx_fields!(ctx);
             CfgMemberJoin::content_impl(ctx, content).await
+        }
+
+        /// Configures the join notification embed title
+        #[poise::command(
+            slash_command,
+            required_permissions = "ADMINISTRATOR",
+            default_member_permissions = "ADMINISTRATOR",
+            guild_only,
+            category = "Management"
+        )]
+        async fn title(
+            ctx: Context<'_>,
+            #[description = "Embed title text"] title: Option<String>,
+        ) -> Result<(), Error> {
+            record_ctx_fields!(ctx);
+            CfgMemberJoin::title_impl(ctx, title).await
         }
 
         /// Configures the join notification embed description
@@ -213,10 +244,9 @@ impl CfgMemberJoin {
             required_permissions = "ADMINISTRATOR",
             default_member_permissions = "ADMINISTRATOR",
             guild_only,
-            rename = "description",
             category = "Management"
         )]
-        pub async fn description(
+        async fn description(
             ctx: Context<'_>,
             #[description = "Embed description text"] description: Option<String>,
         ) -> Result<(), Error> {
@@ -230,10 +260,9 @@ impl CfgMemberJoin {
             required_permissions = "ADMINISTRATOR",
             default_member_permissions = "ADMINISTRATOR",
             guild_only,
-            rename = "thumbnail",
             category = "Management"
         )]
-        pub async fn thumbnail(
+        async fn thumbnail(
             ctx: Context<'_>,
             #[description = "Embed thumbnail file upload"] thumbnail_file: Option<serenity::Attachment>,
             #[description = "Embed thumbnail web url"] thumbnail_url: Option<String>,
@@ -242,16 +271,32 @@ impl CfgMemberJoin {
             CfgMemberJoin::thumbnail_impl(ctx, thumbnail_file, thumbnail_url).await
         }
 
+        /// Configures the join notification embed image
+        #[poise::command(
+            slash_command,
+            required_permissions = "ADMINISTRATOR",
+            default_member_permissions = "ADMINISTRATOR",
+            guild_only,
+            category = "Management"
+        )]
+        async fn image(
+            ctx: Context<'_>,
+            #[description = "Embed image file upload"] image_file: Option<serenity::Attachment>,
+            #[description = "Embed image web url"] image_url: Option<String>,
+        ) -> Result<(), Error> {
+            record_ctx_fields!(ctx);
+            CfgMemberJoin::image_impl(ctx, image_file, image_url).await
+        }
+
         /// Configures the join notification embed author
         #[poise::command(
             slash_command,
             required_permissions = "ADMINISTRATOR",
             default_member_permissions = "ADMINISTRATOR",
             guild_only,
-            rename = "author",
             category = "Management"
         )]
-        pub async fn author(
+        async fn author(
             ctx: Context<'_>,
             #[description = "Embed author text"] author: Option<String>,
         ) -> Result<(), Error> {
@@ -268,7 +313,7 @@ impl CfgMemberJoin {
             rename = "author-icon",
             category = "Management"
         )]
-        pub async fn author_icon(
+        async fn author_icon(
             ctx: Context<'_>,
             #[description = "Embed author icon file upload"] author_icon_file: Option<
                 serenity::Attachment,
@@ -285,10 +330,9 @@ impl CfgMemberJoin {
             required_permissions = "ADMINISTRATOR",
             default_member_permissions = "ADMINISTRATOR",
             guild_only,
-            rename = "footer",
             category = "Management"
         )]
-        pub async fn footer(
+        async fn footer(
             ctx: Context<'_>,
             #[description = "Embed footer text"] footer: Option<String>,
         ) -> Result<(), Error> {
@@ -305,7 +349,7 @@ impl CfgMemberJoin {
             rename = "footer-icon",
             category = "Management"
         )]
-        pub async fn footer_icon(
+        async fn footer_icon(
             ctx: Context<'_>,
             #[description = "Embed footer icon file upload"] footer_icon_file: Option<
                 serenity::Attachment,
@@ -338,15 +382,17 @@ impl CfgMemberLeave {
         subcommands(
             "CfgMemberLeave::full",
             "CfgMemberLeave::content",
+            "CfgMemberLeave::title",
             "CfgMemberLeave::description",
             "CfgMemberLeave::thumbnail",
+            "CfgMemberLeave::image",
             "CfgMemberLeave::author",
             "CfgMemberLeave::author_icon",
             "CfgMemberLeave::footer",
             "CfgMemberLeave::footer_icon",
         )
     )]
-    pub async fn group(_ctx: Context<'_>) -> Result<(), Error> {
+    async fn group(_ctx: Context<'_>) -> Result<(), Error> {
         Ok(())
     }
 
@@ -360,12 +406,15 @@ impl CfgMemberLeave {
             rename = "full",
             category = "Management"
         )]
-        pub async fn full(
+        async fn full(
             ctx: Context<'_>,
             #[description = "Plain-text content of the notification message"] content: Option<String>,
+            #[description = "Embed title text"] title: Option<String>,
             #[description = "Embed description text"] description: Option<String>,
             #[description = "Embed thumbnail file upload"] thumbnail_file: Option<serenity::Attachment>,
             #[description = "Embed thumbnail web url"] thumbnail_url: Option<String>,
+            #[description = "Embed image file upload"] image_file: Option<serenity::Attachment>,
+            #[description = "Embed image web url"] image_url: Option<String>,
             #[description = "Embed author text"] author: Option<String>,
             #[description = "Embed author icon file upload"] author_icon_file: Option<
                 serenity::Attachment,
@@ -381,9 +430,12 @@ impl CfgMemberLeave {
             CfgMemberLeave::full_impl(
                 ctx,
                 content,
+                title,
                 description,
                 thumbnail_file,
                 thumbnail_url,
+                image_file,
+                image_url,
                 author,
                 author_icon_file,
                 author_icon_url,
@@ -403,12 +455,28 @@ impl CfgMemberLeave {
             rename = "content",
             category = "Management"
         )]
-        pub async fn content(
+        async fn content(
             ctx: Context<'_>,
             #[description = "Plain-text content of the notification message"] content: Option<String>,
         ) -> Result<(), Error> {
             record_ctx_fields!(ctx);
             CfgMemberLeave::content_impl(ctx, content).await
+        }
+
+        /// Configures the leave notification embed title
+        #[poise::command(
+            slash_command,
+            required_permissions = "ADMINISTRATOR",
+            default_member_permissions = "ADMINISTRATOR",
+            guild_only,
+            category = "Management"
+        )]
+        async fn title(
+            ctx: Context<'_>,
+            #[description = "Embed title text"] title: Option<String>,
+        ) -> Result<(), Error> {
+            record_ctx_fields!(ctx);
+            CfgMemberLeave::title_impl(ctx, title).await
         }
 
         /// Configures the leave notification embed description
@@ -420,7 +488,7 @@ impl CfgMemberLeave {
             rename = "description",
             category = "Management"
         )]
-        pub async fn description(
+        async fn description(
             ctx: Context<'_>,
             #[description = "Embed description text"] description: Option<String>,
         ) -> Result<(), Error> {
@@ -437,13 +505,30 @@ impl CfgMemberLeave {
             rename = "thumbnail",
             category = "Management"
         )]
-        pub async fn thumbnail(
+        async fn thumbnail(
             ctx: Context<'_>,
             #[description = "Embed thumbnail file upload"] thumbnail_file: Option<serenity::Attachment>,
             #[description = "Embed thumbnail web url"] thumbnail_url: Option<String>,
         ) -> Result<(), Error> {
             record_ctx_fields!(ctx);
             CfgMemberLeave::thumbnail_impl(ctx, thumbnail_file, thumbnail_url).await
+        }
+
+        /// Configures the leave notification embed image
+        #[poise::command(
+            slash_command,
+            required_permissions = "ADMINISTRATOR",
+            default_member_permissions = "ADMINISTRATOR",
+            guild_only,
+            category = "Management"
+        )]
+        async fn image(
+            ctx: Context<'_>,
+            #[description = "Embed image file upload"] image_file: Option<serenity::Attachment>,
+            #[description = "Embed image web url"] image_url: Option<String>,
+        ) -> Result<(), Error> {
+            record_ctx_fields!(ctx);
+            CfgMemberLeave::image_impl(ctx, image_file, image_url).await
         }
 
         /// Configures the leave notification embed author
@@ -455,7 +540,7 @@ impl CfgMemberLeave {
             rename = "author",
             category = "Management"
         )]
-        pub async fn author(
+        async fn author(
             ctx: Context<'_>,
             #[description = "Embed author text"] author: Option<String>,
         ) -> Result<(), Error> {
@@ -472,7 +557,7 @@ impl CfgMemberLeave {
             rename = "author-icon",
             category = "Management"
         )]
-        pub async fn author_icon(
+        async fn author_icon(
             ctx: Context<'_>,
             #[description = "Embed author icon file upload"] author_icon_file: Option<
                 serenity::Attachment,
@@ -492,7 +577,7 @@ impl CfgMemberLeave {
             rename = "footer",
             category = "Management"
         )]
-        pub async fn footer(
+        async fn footer(
             ctx: Context<'_>,
             #[description = "Embed footer text"] footer: Option<String>,
         ) -> Result<(), Error> {
@@ -509,7 +594,7 @@ impl CfgMemberLeave {
             rename = "footer-icon",
             category = "Management"
         )]
-        pub async fn footer_icon(
+        async fn footer_icon(
             ctx: Context<'_>,
             #[description = "Embed footer icon file upload"] footer_icon_file: Option<
                 serenity::Attachment,

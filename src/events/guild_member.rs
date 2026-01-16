@@ -40,8 +40,10 @@ pub struct MemberNotificationMessageDetails {
 
 #[derive(Default, Clone, Debug)]
 pub struct MemberNotificationEmbedDetails {
+    pub title: Option<String>,
     pub description: Option<String>,
     pub thumbnail: Option<MemberNotificationFile>,
+    pub image: Option<MemberNotificationFile>,
     pub author: Option<String>,
     pub author_icon_url: Option<MemberNotificationFile>,
     pub footer: Option<String>,
@@ -62,8 +64,10 @@ impl MemberNotificationMessageDetails {
     pub fn format(
         content: Option<String>,
         embed: bool,
+        title: Option<String>,
         description: Option<String>,
         thumbnail: Option<MemberNotificationFile>,
+        image: Option<MemberNotificationFile>,
         author: Option<String>,
         author_icon_url: Option<MemberNotificationFile>,
         footer: Option<String>,
@@ -73,8 +77,10 @@ impl MemberNotificationMessageDetails {
             content: content,
             embed: if embed {
                 Some(MemberNotificationEmbedDetails {
+                    title: title,
                     description: description,
                     thumbnail: thumbnail,
+                    image: image,
                     author: author,
                     author_icon_url: author_icon_url,
                     footer: footer,
@@ -178,8 +184,10 @@ impl MemberNotificationMessageDetails {
         let content = get_string(format.content, &fmtargs);
         let embed: Option<MemberNotificationEmbedDetails> = if let Some(embd_fmt) = format.embed {
             Some(MemberNotificationEmbedDetails {
+                title: get_string(embd_fmt.title, &fmtargs),
                 description: get_string(embd_fmt.description, &fmtargs),
                 thumbnail: get_attachment(embd_fmt.thumbnail, &fmtargs),
+                image: get_attachment(embd_fmt.image, &fmtargs),
                 author: get_string(embd_fmt.author, &fmtargs),
                 author_icon_url: get_attachment(embd_fmt.author_icon_url, &fmtargs),
                 footer: get_string(embd_fmt.footer, &fmtargs),
@@ -202,6 +210,10 @@ impl MemberNotificationMessageDetails {
         if let Some(embed_details) = &self.embed {
             let mut embed = CreateEmbed::default();
             let mut attachments: Vec<CreateAttachment> = vec![];
+            if let Some(x) = &embed_details.title {
+                embed = embed.title(x);
+            }
+
             if let Some(x) = &embed_details.description {
                 embed = embed.description(x);
             }
@@ -230,6 +242,33 @@ impl MemberNotificationMessageDetails {
                     }
                 } else {
                     embed = embed.thumbnail(&thumbnail_file.url);
+                }
+            }
+
+            if let Some(image_file) = &embed_details.image {
+                if image_file.attachment {
+                    match CreateAttachment::path(
+                        get_data_directory()
+                            .join("user_content")
+                            .join(id_to_string(guild_id.clone()))
+                            .join(&image_file.url),
+                    )
+                    .await
+                    {
+                        Ok(attachment) => {
+                            embed = embed
+                                .image(format!("attachment://{}", attachment.filename.clone()));
+                            attachments.push(attachment);
+                        }
+                        Err(e) => {
+                            error!(
+                                "Attempted to create attachment with user content that does not exist: {:?}",
+                                e
+                            );
+                        }
+                    }
+                } else {
+                    embed = embed.image(&image_file.url);
                 }
             }
 
@@ -375,9 +414,12 @@ pub async fn get_member_notification_details(
                 !model.description.is_empty()
                     || !model.author.is_empty()
                     || !model.footer.is_empty()
-                    || !model.thumbnail_url.is_empty(),
+                    || !model.thumbnail_url.is_empty()
+                    || !model.image_url.is_empty(),
+                optional_string(model.title),
                 optional_string(model.description),
                 optional_attachment(model.thumbnail_is_file, model.thumbnail_url),
+                optional_attachment(model.image_is_file, model.image_url),
                 optional_string(model.author),
                 optional_attachment(model.author_icon_is_file, model.author_icon_url),
                 optional_string(model.footer),

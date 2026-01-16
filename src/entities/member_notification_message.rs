@@ -12,10 +12,15 @@ pub struct Model {
     #[sea_orm(column_type = "Text")]
     pub content: String,
     #[sea_orm(column_type = "Text")]
+    pub title: String,
+    #[sea_orm(column_type = "Text")]
     pub description: String,
     pub thumbnail_is_file: bool,
     #[sea_orm(column_type = "Text")]
     pub thumbnail_url: String,
+    pub image_is_file: bool,
+    #[sea_orm(column_type = "Text")]
+    pub image_url: String,
     #[sea_orm(column_type = "Text")]
     pub author: String,
     pub author_icon_is_file: bool,
