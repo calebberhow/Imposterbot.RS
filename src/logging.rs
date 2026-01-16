@@ -41,27 +41,27 @@ fn init_tracing() -> Box<dyn std::any::Any> {
     let env_filter = EnvFilter::try_from_env(environment::LOG_LEVEL)
         .unwrap_or_else(|_| EnvFilter::new("warn,imposterbot=info"));
 
-    let log_path = get_log_path_var();
+    let do_log_path = get_log_path_var();
     tracing_subscriber::registry()
         .with(env_filter)
-        // stdout layer
-        .with(
-            fmt::layer()
-                .with_writer(std::io::stdout)
-                .with_ansi(true)
-                .with_file(log_path)
-                .with_line_number(log_path)
-                .with_target(log_path)
-                .with_span_events(fmt::format::FmtSpan::CLOSE),
-        )
         // file layer
         .with(
             fmt::layer()
                 .with_writer(non_blocking_writer)
                 .with_ansi(false)
-                .with_file(log_path)
-                .with_line_number(log_path)
-                .with_target(log_path)
+                .with_file(do_log_path)
+                .with_line_number(do_log_path)
+                .with_target(!do_log_path)
+                .with_span_events(fmt::format::FmtSpan::CLOSE),
+        )
+        // stdout layer
+        .with(
+            fmt::layer()
+                .with_writer(std::io::stdout)
+                .with_ansi(true)
+                .with_file(do_log_path)
+                .with_line_number(do_log_path)
+                .with_target(!do_log_path)
                 .with_span_events(fmt::format::FmtSpan::CLOSE),
         )
         .init();
