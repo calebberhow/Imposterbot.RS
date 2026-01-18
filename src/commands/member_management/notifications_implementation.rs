@@ -1,3 +1,11 @@
+/*!
+
+Implements the member join / member leave notifications feature, abstracted away from the poise declarations, allowing for code de-duplication.
+
+Without this layer of abstraction, every single function was duplicated twice (once for join and once for leave), with few options to reduce complexity.
+
+*/
+
 use std::{path::Path, pin::Pin};
 
 use poise::{
@@ -16,7 +24,6 @@ use uuid::Uuid;
 use crate::{
     Context, Error,
     entities::{self, member_notification_message},
-    events::guild_member::MemberNotificationFile,
     infrastructure::{
         environment::get_guild_user_content_directory,
         ids::{id_to_string, require_guild_id},
@@ -29,131 +36,157 @@ pub enum NotificationType {
     Leave,
 }
 
-#[derive(Default, Debug)]
-struct NotificationManagementRequest {
-    pub content: Option<String>,
-    pub clear_content: Option<bool>,
-    pub title: Option<String>,
-    pub clear_title: Option<bool>,
-    pub description: Option<String>,
-    pub clear_description: Option<bool>,
-    pub thumbnail_file: Option<serenity::Attachment>,
-    pub thumbnail_url: Option<String>,
-    pub clear_thumbnail: Option<bool>,
-    pub image_file: Option<serenity::Attachment>,
-    pub image_url: Option<String>,
-    pub clear_image: Option<bool>,
-    pub author: Option<String>,
-    pub clear_author: Option<bool>,
-    pub author_icon_file: Option<serenity::Attachment>,
-    pub author_icon_url: Option<String>,
-    pub clear_author_icon: Option<bool>,
-    pub footer: Option<String>,
-    pub clear_footer: Option<bool>,
-    pub footer_icon_file: Option<serenity::Attachment>,
-    pub footer_icon_url: Option<String>,
-    pub clear_footer_icon: Option<bool>,
+#[derive(Default, Debug, Clone)]
+enum OptionalClearable<T> {
+    /// Ignored
+    #[default]
+    None,
+    /// Represents a default value of T
+    Clear,
+    /// Some value of T
+    Some(T),
 }
 
-impl NotificationManagementRequest {
-    fn required_content(mut self, value: Option<String>) -> Self {
-        self.clear_content = Some(value.is_none());
-        self.content = value;
-        self
-    }
-
-    fn required_title(mut self, value: Option<String>) -> Self {
-        self.clear_title = Some(value.is_none());
-        self.title = value;
-        self
-    }
-
-    fn required_description(mut self, value: Option<String>) -> Self {
-        self.clear_description = Some(value.is_none());
-        self.description = value;
-        self
-    }
-
-    fn required_thumbnail(
-        mut self,
-        file: Option<serenity::Attachment>,
-        url: Option<String>,
-    ) -> Self {
-        self.clear_thumbnail = Some(file.is_none() && url.is_none());
-        self.thumbnail_file = file;
-        self.thumbnail_url = url;
-        self
-    }
-
-    fn required_image(mut self, file: Option<serenity::Attachment>, url: Option<String>) -> Self {
-        self.clear_image = Some(file.is_none() && url.is_none());
-        self.image_file = file;
-        self.image_url = url;
-        self
-    }
-
-    fn required_author(mut self, value: Option<String>) -> Self {
-        self.clear_author = Some(value.is_none());
-        self.author = value;
-        self
-    }
-
-    fn required_author_icon(
-        mut self,
-        file: Option<serenity::Attachment>,
-        url: Option<String>,
-    ) -> Self {
-        self.clear_author_icon = Some(file.is_none() && url.is_none());
-        self.author_icon_file = file;
-        self.author_icon_url = url;
-        self
-    }
-
-    fn required_footer(mut self, value: Option<String>) -> Self {
-        self.clear_footer = Some(value.is_none());
-        self.footer = value;
-        self
-    }
-
-    fn required_footer_icon(
-        mut self,
-        file: Option<serenity::Attachment>,
-        url: Option<String>,
-    ) -> Self {
-        self.clear_footer_icon = Some(file.is_none() && url.is_none());
-        self.footer_icon_file = file;
-        self.footer_icon_url = url;
-        self
-    }
-}
-
-/// Returns default is `clear == Some(true)`, otherwise returns Value,
-fn apply_clear<T>(value: Option<T>, clear: Option<bool>) -> Option<T>
+impl<T> Into<Option<T>> for OptionalClearable<T>
 where
     T: Default,
 {
-    if clear == Some(true) {
-        Some(Default::default())
-    } else {
-        value
+    fn into(self) -> Option<T> {
+        match self {
+            Self::Some(value) => Some(value),
+            Self::Clear => Some(T::default()),
+            Self::None => None,
+        }
     }
 }
 
-fn get_file_attachment(
-    url: Option<String>,
-    file: &Option<serenity::Attachment>,
-) -> Option<MemberNotificationFile> {
-    file.as_ref()
-        .map(|f| MemberNotificationFile {
-            attachment: true,
-            url: f.filename.clone(),
-        })
-        .or(url.map(|u| MemberNotificationFile {
-            attachment: false,
-            url: u,
-        }))
+impl<T> From<Option<T>> for OptionalClearable<T> {
+    fn from(value: Option<T>) -> Self {
+        match value {
+            Some(value) => Self::Some(value),
+            None => Self::Clear,
+        }
+    }
 }
 
+#[derive(Debug, Clone)]
+enum EmbedAttachment {
+    URL(String),
+    File(serenity::Attachment),
+}
+
+impl EmbedAttachment {
+    fn is_file(&self) -> bool {
+        match self {
+            Self::File(_) => true,
+            _ => false,
+        }
+    }
+
+    async fn get_url_and_create_attachment(
+        self,
+        guild_id: &GuildId,
+        files_added: &mut Vec<String>,
+    ) -> Result<String, crate::Error> {
+        match self {
+            EmbedAttachment::URL(u) => Ok(u),
+            EmbedAttachment::File(f) => {
+                match create_file_from_attachment_safe(&guild_id, f, files_added).await {
+                    Ok(filename) => Ok(filename),
+                    Err(e) => {
+                        return Err(e);
+                    }
+                }
+            }
+        }
+    }
+}
+
+impl Default for EmbedAttachment {
+    fn default() -> Self {
+        Self::URL(String::default())
+    }
+}
+
+/// Contains all of the data required to add or modify a member join or member leave notification.
+/// Every field contians
+#[derive(Default, Debug, Clone)]
+struct NotificationManagementRequest {
+    pub content: OptionalClearable<String>,
+    pub title: OptionalClearable<String>,
+    pub description: OptionalClearable<String>,
+    pub thumbnail: OptionalClearable<EmbedAttachment>,
+    pub image: OptionalClearable<EmbedAttachment>,
+    pub author: OptionalClearable<String>,
+    pub author_icon: OptionalClearable<EmbedAttachment>,
+    pub footer: OptionalClearable<String>,
+    pub footer_icon: OptionalClearable<EmbedAttachment>,
+}
+
+impl NotificationManagementRequest {
+    fn content(mut self, value: Option<String>) -> Self {
+        self.content = value.into();
+        self
+    }
+
+    fn title(mut self, value: Option<String>) -> Self {
+        self.title = value.into();
+        self
+    }
+
+    fn description(mut self, value: Option<String>) -> Self {
+        self.description = value.into();
+        self
+    }
+
+    fn thumbnail(mut self, file: Option<serenity::Attachment>, url: Option<String>) -> Self {
+        self.thumbnail = file
+            .map(|f| EmbedAttachment::File(f))
+            .or(url.map(|u| EmbedAttachment::URL(u)))
+            .into();
+        self
+    }
+
+    fn image(mut self, file: Option<serenity::Attachment>, url: Option<String>) -> Self {
+        self.image = file
+            .map(|f| EmbedAttachment::File(f))
+            .or(url.map(|u| EmbedAttachment::URL(u)))
+            .into();
+        self
+    }
+
+    fn author(mut self, value: Option<String>) -> Self {
+        self.author = value.into();
+        self
+    }
+
+    fn author_icon(mut self, file: Option<serenity::Attachment>, url: Option<String>) -> Self {
+        self.author_icon = file
+            .map(|f| EmbedAttachment::File(f))
+            .or(url.map(|u| EmbedAttachment::URL(u)))
+            .into();
+        self
+    }
+
+    fn footer(mut self, value: Option<String>) -> Self {
+        self.footer = value.into();
+        self
+    }
+
+    fn footer_icon(mut self, file: Option<serenity::Attachment>, url: Option<String>) -> Self {
+        self.footer_icon = file
+            .map(|f| EmbedAttachment::File(f))
+            .or(url.map(|u| EmbedAttachment::URL(u)))
+            .into();
+        self
+    }
+}
+
+/// Creates a file on disk for an attachment submitted via discord API, then returns the name of the newly created file.
+///
+/// This method is 'safe', as in it ensures that any files created (including previous files which can be input with [`files_added`]) are cleaned up if an error occurs.
+///
+/// Since a discord attachment only contains a url to the content hosted on the discord CDN, this function will perform an HTTP request to download the content and write it to disk.
 async fn create_file_from_attachment_safe(
     guild_id: &GuildId,
     attachment: Attachment,
@@ -166,6 +199,7 @@ async fn create_file_from_attachment_safe(
         WriteError(String, crate::Error),
         CreateFileError(crate::Error),
     }
+
     async fn try_create_file(
         guild_id: &GuildId,
         attachment: Attachment,
@@ -292,28 +326,6 @@ async fn configure_member_notifications_impl(
     .one(&ctx.data().db_pool)
     .await?;
 
-    let content = apply_clear(request.content, request.clear_content);
-    let title = apply_clear(request.title, request.clear_title);
-    let description = apply_clear(request.description, request.clear_description);
-    let thumbnail = apply_clear(
-        get_file_attachment(request.thumbnail_url, &request.thumbnail_file),
-        request.clear_thumbnail,
-    );
-    let image = apply_clear(
-        get_file_attachment(request.image_url, &request.image_file),
-        request.clear_image,
-    );
-    let author = apply_clear(request.author, request.clear_author);
-    let author_icon = apply_clear(
-        get_file_attachment(request.author_icon_url, &request.author_icon_file),
-        request.clear_author_icon,
-    );
-    let footer = apply_clear(request.footer, request.clear_footer);
-    let footer_icon = apply_clear(
-        get_file_attachment(request.footer_icon_url, &request.footer_icon_file),
-        request.clear_footer_icon,
-    );
-
     let mut files_to_delete: Vec<String> = vec![];
     let mut files_added: Vec<String> = vec![];
     let (mut model, update) = match existing {
@@ -328,122 +340,74 @@ async fn configure_member_notifications_impl(
         ),
     };
 
-    if let Some(x) = content {
+    if let Option::<String>::Some(x) = request.content.into() {
         model.content = Set(x.replace("\\n", "\n"));
     }
 
-    if let Some(x) = title {
+    if let Option::<String>::Some(x) = request.title.into() {
         model.title = Set(x.replace("\\n", "\n"));
     }
 
-    if let Some(x) = description {
+    if let Option::<String>::Some(x) = request.description.into() {
         model.description = Set(x.replace("\\n", "\n"));
     }
 
-    if let Some(x) = thumbnail {
+    if let Option::<EmbedAttachment>::Some(x) = request.thumbnail.into() {
         if let Some(old_file) =
             active_model_file_attachment(model.thumbnail_is_file, model.thumbnail_url)
         {
-            files_to_delete.push(old_file.clone());
+            files_to_delete.push(old_file);
         }
 
-        model.thumbnail_is_file = Set(x.attachment);
-        model.thumbnail_url = Set(x.url.clone());
-
-        if x.attachment
-            && !x.url.is_empty()
-            && let Some(attachment) = request.thumbnail_file
-        {
-            match create_file_from_attachment_safe(&guild_id, attachment, &mut files_added).await {
-                Ok(filename) => {
-                    model.thumbnail_url = Set(filename);
-                }
-                Err(e) => {
-                    return Err(e);
-                }
-            }
-        }
+        model.thumbnail_is_file = Set(x.is_file());
+        model.thumbnail_url = Set(x
+            .get_url_and_create_attachment(&guild_id, &mut files_added)
+            .await?);
     }
 
-    if let Some(x) = image {
+    if let Option::<EmbedAttachment>::Some(x) = request.image.into() {
         if let Some(old_file) = active_model_file_attachment(model.image_is_file, model.image_url) {
-            files_to_delete.push(old_file.clone());
+            files_to_delete.push(old_file);
         }
 
-        model.image_is_file = Set(x.attachment);
-        model.image_url = Set(x.url.clone());
-
-        if x.attachment
-            && !x.url.is_empty()
-            && let Some(attachment) = request.image_file
-        {
-            match create_file_from_attachment_safe(&guild_id, attachment, &mut files_added).await {
-                Ok(filename) => {
-                    model.image_url = Set(filename);
-                }
-                Err(e) => {
-                    return Err(e);
-                }
-            }
-        }
+        model.image_is_file = Set(x.is_file());
+        model.image_url = Set(x
+            .get_url_and_create_attachment(&guild_id, &mut files_added)
+            .await?)
     }
 
-    if let Some(x) = author {
+    if let Option::<String>::Some(x) = request.author.into() {
         model.author = Set(x.replace("\\n", "\n"));
     }
 
-    if let Some(x) = author_icon {
+    if let Option::<EmbedAttachment>::Some(x) = request.author_icon.into() {
         if let Some(old_file) =
             active_model_file_attachment(model.author_icon_is_file, model.author_icon_url)
         {
-            files_to_delete.push(old_file.clone());
+            files_to_delete.push(old_file);
         }
 
-        model.author_icon_is_file = Set(x.attachment);
-        model.author_icon_url = Set(x.url.clone());
-
-        if x.attachment
-            && !x.url.is_empty()
-            && let Some(attachment) = request.author_icon_file
-        {
-            match create_file_from_attachment_safe(&guild_id, attachment, &mut files_added).await {
-                Ok(filename) => {
-                    model.author_icon_url = Set(filename);
-                }
-                Err(e) => {
-                    return Err(e);
-                }
-            }
-        }
+        model.author_icon_is_file = Set(x.is_file());
+        model.author_icon_url = Set(x
+            .get_url_and_create_attachment(&guild_id, &mut files_added)
+            .await?)
     }
 
-    if let Some(x) = footer {
+    if let Option::<String>::Some(x) = request.footer.into() {
         model.footer = Set(x.replace("\\n", "\n"));
     }
 
-    if let Some(x) = footer_icon {
+    if let Option::<EmbedAttachment>::Some(x) = request.footer_icon.into() {
         if let Some(old_file) =
             active_model_file_attachment(model.footer_icon_is_file, model.footer_icon_url)
         {
-            files_to_delete.push(old_file.clone());
+            files_to_delete.push(old_file);
         }
 
-        model.footer_icon_is_file = Set(x.attachment);
-        model.footer_icon_url = Set(x.url.clone());
-
-        if x.attachment
-            && !x.url.is_empty()
-            && let Some(attachment) = request.footer_icon_file
-        {
-            match create_file_from_attachment_safe(&guild_id, attachment, &mut files_added).await {
-                Ok(filename) => {
-                    model.footer_icon_url = Set(filename);
-                }
-                Err(e) => {
-                    return Err(e);
-                }
-            }
-        }
+        model.footer_icon_is_file = Set(x.is_file());
+        model.footer_icon_url = Set(x
+            .get_url_and_create_attachment(&guild_id, &mut files_added)
+            .await?)
     }
 
     if update {
@@ -602,42 +566,37 @@ pub trait MemberEventConfigurer {
                 ctx,
                 Self::NOTIFICATION_TYPE,
                 NotificationManagementRequest::default()
-                    .required_content(content)
-                    .required_title(title)
-                    .required_description(description)
-                    .required_thumbnail(thumbnail_file, thumbnail_url)
-                    .required_image(image_file, image_url)
-                    .required_author(author)
-                    .required_author_icon(author_icon_file, author_icon_url)
-                    .required_footer(footer)
-                    .required_footer_icon(footer_icon_file, footer_icon_url),
+                    .content(content)
+                    .title(title)
+                    .description(description)
+                    .thumbnail(thumbnail_file, thumbnail_url)
+                    .image(image_file, image_url)
+                    .author(author)
+                    .author_icon(author_icon_file, author_icon_url)
+                    .footer(footer)
+                    .footer_icon(footer_icon_file, footer_icon_url),
             )
             .await
         })
     }
 
-    member_cmd_impl!(content_impl, content, required_content);
-    member_cmd_impl!(title_impl, description, required_title);
-    member_cmd_impl!(description_impl, description, required_description);
-    member_cmd_impl!(
-        thumbnail_impl,
-        thumbnail_file,
-        thumbnail_url,
-        required_thumbnail
-    );
-    member_cmd_impl!(image_impl, image_file, image_url, required_image);
-    member_cmd_impl!(author_impl, author, required_author);
+    member_cmd_impl!(content_impl, content, content);
+    member_cmd_impl!(title_impl, description, title);
+    member_cmd_impl!(description_impl, description, description);
+    member_cmd_impl!(thumbnail_impl, thumbnail_file, thumbnail_url, thumbnail);
+    member_cmd_impl!(image_impl, image_file, image_url, image);
+    member_cmd_impl!(author_impl, author, author);
     member_cmd_impl!(
         author_icon_impl,
         author_icon_file,
         author_icon_url,
-        required_author_icon
+        author_icon
     );
-    member_cmd_impl!(footer_impl, footer, required_footer);
+    member_cmd_impl!(footer_impl, footer, footer);
     member_cmd_impl!(
         footer_icon_impl,
         footer_icon_file,
         footer_icon_url,
-        required_footer_icon
+        footer_icon
     );
 }

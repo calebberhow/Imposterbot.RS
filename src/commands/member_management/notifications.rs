@@ -1,3 +1,11 @@
+/*!
+
+Poise command declarations for the various app commands that may be used to modify member join and member leave notifications
+
+Declarations ONLY, no real implementations.
+
+*/
+
 use poise::{
     CreateReply,
     serenity_prelude::{self as serenity, CreateEmbed},
@@ -81,6 +89,7 @@ static HELP_LIST: &'static str = r#"
 - `/notify-member leave author-icon`
 - `/notify-member leave footer-icon`
 "#;
+
 #[poise::command(
     slash_command,
     required_permissions = "ADMINISTRATOR",
